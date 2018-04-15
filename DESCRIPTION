@@ -1,11 +1,18 @@
 Package: fvoa
 Type: Package
-Title: Calculate FVOA
-Version: 0.1.0
-Author: Who wrote it
-Maintainer: The package maintainer <yourself@somewhere.net>
+Title: Fantasy Football Team Analysis
+Version: 0.1.0.9000
+Author: Scott Frechette <scottfrechette@gmail.com>
+Maintainer: Scott Frechette <scottfrechette@gmail.com>
 Description: More about what it does (maybe more than one line)
     Use four spaces when indenting paragraphs within the Description.
-License: What license is it under?
+License: CC0
 Encoding: UTF-8
 LazyData: true
+Imports: 
+    tidyverse,
+    rlang,
+    lubridate,
+    rvest
+Suggests: 
+    progress
