@@ -26,8 +26,7 @@ scrape_schedule <- function(league, league_id, format = "wide") {
         schedule %>%
           group_by(game_id) %>%
           summarise(teams = paste(value, collapse = ",")) %>%
-          separate(teams, into = c("team1", "team2"), sep = ",") %>%
-          mutate_at(vars(contains("team")), factor)
+          separate(teams, into = c("team1", "team2"), sep = ",")
 
       } else if (format == "long") {
 
@@ -42,7 +41,8 @@ scrape_schedule <- function(league, league_id, format = "wide") {
                week = 1:17, format = format) %>%
       mutate(weekly_schedule = pmap(list(league_id, week, format), scrape_week)) %>%
       unnest() %>%
-      select(-league_id, -format)
+      select(-league_id, -format) %>%
+      mutate_at(vars(contains("team")), factor)
 
   } else if (league == "espn") {
 
