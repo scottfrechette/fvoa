@@ -137,3 +137,25 @@ pretty_breaks <- function (x, n = 5, ...) {
   names(breaks) <- attr(breaks, "labels")
   breaks
 }
+
+long_format <- function(df, team1 = team1, team2 = team2) {
+
+  df %>%
+    unite(team, team1, team2) %>%
+    mutate(team = map(team, strsplit, "_")) %>%
+    unnest() %>%
+    unnest() %>%
+    mutate(team = factor(team))
+
+}
+
+wide_format <- function(df, week = week, game_id = game_id, old = team, new = c("team1", "team2")) {
+
+  df  %>%
+    group_by(week, game_id) %>%
+    summarise(teams = paste(team, collapse = ",")) %>%
+    ungroup() %>%
+    separate(teams, into = c("team1", "team2"), sep = ",") %>%
+    mutate_at(vars(contains("team")), factor)
+
+}
