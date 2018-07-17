@@ -27,7 +27,7 @@ scrape_schedule <- function(league, league_id, format = "wide") {
           group_by(game_id) %>%
           summarise(teams = paste(value, collapse = ",")) %>%
           separate(teams, into = c("team1", "team2"), sep = ",") %>%
-          mutate_at(contains(team), factor)
+          mutate_at(vars(contains("team")), factor)
 
       } else if (format == "long") {
 
@@ -66,7 +66,7 @@ scrape_team <- function(week, team_id, league, league_id, season = 2018) {
   if(league == "yahoo") {
 
     url <- paste0("https://football.fantasysports.yahoo.com/f1/", league_id,
-                "/matchup?week=", week, "&mid1=", team_id)
+                  "/matchup?week=", week, "&mid1=", team_id)
 
     page <- read_html(url)
 
@@ -109,8 +109,8 @@ scrape_team <- function(week, team_id, league, league_id, season = 2018) {
   } else if (league == "espn") {
 
     url <- paste0("http://games.espn.com/ffl/boxscorequick?leagueId=", league_id,
-                "&teamId=", team_id, "&scoringPeriodId=", week, "&seasonId=",
-                season, "&view=scoringperiod&version=quick")
+                  "&teamId=", team_id, "&scoringPeriodId=", week, "&seasonId=",
+                  season, "&view=scoringperiod&version=quick")
 
     page <- read_html(url)
 
