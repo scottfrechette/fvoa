@@ -132,12 +132,6 @@ convert_percent <- function (x) {
   paste0(round(x * 100, 1), "%")
 } # convert number to percent
 
-pretty_breaks <- function (x, n = 5, ...) {
-  breaks <- pretty(x, n, ...)
-  names(breaks) <- attr(breaks, "labels")
-  breaks
-}
-
 long_format <- function(df, new, ...) {
 
   new_name = enquo(new) %>% quo_name()
