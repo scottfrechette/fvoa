@@ -1,7 +1,7 @@
 Package: fvoa
 Type: Package
-Title: Fantasy Football Team Analysis
-Version: 0.1.0.9000
+Title: Frech-Adjusted Value Over Average for Fantasy Football
+Version: 0.0.0.9000
 Author: Scott Frechette <scottfrechette@gmail.com>
 Maintainer: Scott Frechette <scottfrechette@gmail.com>
 Description: More about what it does (maybe more than one line)
@@ -10,9 +10,17 @@ License: CC0
 Encoding: UTF-8
 LazyData: true
 Imports: 
-    tidyverse,
+    tidyr,
+    dplyr,
+    purrr,
+    tibble,
+    ggplot2,
+    stringr,
     rlang,
     lubridate,
-    rvest
+    rvest,
+    magrittr
 Suggests: 
     progress
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 6.0.1
