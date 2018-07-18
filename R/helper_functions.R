@@ -138,24 +138,33 @@ pretty_breaks <- function (x, n = 5, ...) {
   breaks
 }
 
-long_format <- function(df, team1 = team1, team2 = team2) {
+long_format <- function(df, new, ...) {
+
+  new_name = enquo(new) %>% quo_name()
+  old_cols = quos(...)
 
   df %>%
-    unite(team, team1, team2) %>%
-    mutate(team = map(team, strsplit, "_")) %>%
+    unite(tmp, !!!old_cols) %>%
+    mutate(tmp = map(tmp, strsplit, "_")) %>%
     unnest() %>%
     unnest() %>%
-    mutate(team = factor(team))
+    mutate(tmp = factor(tmp)) %>%
+    rename(!!new_name := tmp)
 
 }
 
-wide_format <- function(df, week = week, game_id = game_id, old = team, new = c("team1", "team2")) {
+wide_format <- function(df, old, ..., sep = ",")  {
+
+  old_col = enquo(old)
+  new_col = rlang::quo_text(old_col)
+  grouping = quos(...)
+
 
   df  %>%
-    group_by(week, game_id) %>%
-    summarise(teams = paste(team, collapse = ",")) %>%
+    group_by(!!!grouping) %>%
+    summarise(tmp = paste(!!old_col, collapse = ",")) %>%
     ungroup() %>%
-    separate(teams, into = c("team1", "team2"), sep = ",") %>%
-    mutate_at(vars(contains("team")), factor)
+    separate(tmp, into = paste0(new_col, 1:2), sep = ",") %>%
+    mutate_if(is.character, factor)
 
 }
