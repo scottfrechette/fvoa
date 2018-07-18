@@ -1,6 +1,6 @@
 scrape_schedule <- function(league, league_id, format = "wide") {
 
-  league <- str_to_lower(league)
+  league <- stringr::str_to_lower(league)
 
   stopifnot(league %in% c("espn", "yahoo"),
             is.numeric(league_id),
@@ -13,11 +13,11 @@ scrape_schedule <- function(league, league_id, format = "wide") {
 
       url <- paste0("https://football.fantasysports.yahoo.com/f1/", league_id, "?week=", week)
 
-      page <- read_html(url)
+      page <- xml2::read_html(url)
 
       schedule <- page %>%
-        html_nodes("#matchupweek .F-link") %>%
-        html_text() %>%
+        rvest::html_nodes("#matchupweek .F-link") %>%
+        rvest::html_text() %>%
         as_tibble() %>%
         mutate(game_id = ceiling(row_number()/2))
 
@@ -54,7 +54,7 @@ scrape_schedule <- function(league, league_id, format = "wide") {
 
 scrape_team <- function(week, team_id, league, league_id, season = 2018) {
 
-  league <- str_to_lower(league)
+  league <- stringr::str_to_lower(league)
 
   stopifnot(week %in% 1:17,
             team_id %in% 1:20,
@@ -68,23 +68,23 @@ scrape_team <- function(week, team_id, league, league_id, season = 2018) {
     url <- paste0("https://football.fantasysports.yahoo.com/f1/", league_id,
                   "/matchup?week=", week, "&mid1=", team_id)
 
-    page <- read_html(url)
+    page <- xml2::read_html(url)
 
     name <- page %>%
-      html_nodes(".Ta-end .F-link") %>%
+      rvest::html_nodes(".Ta-end .F-link") %>%
       .[[1]] %>%
-      html_text()
+      rvest::html_text()
 
     starters <- page %>%
-      html_nodes("#statTable1") %>%
-      html_table() %>%
+      rvest::html_nodes("#statTable1") %>%
+      rvest::html_table() %>%
       flatten_dfc() %>%
       select(1:5) %>%
       filter(Pos != "Total")
 
     bench <- page %>%
-      html_nodes("#statTable2") %>%
-      html_table(fill = T) %>%
+      rvest::html_nodes("#statTable2") %>%
+      rvest::html_table(fill = T) %>%
       flatten_dfc() %>%
       select(1:5) %>%
       mutate(Proj = as.numeric(Proj),
@@ -112,15 +112,15 @@ scrape_team <- function(week, team_id, league, league_id, season = 2018) {
                   "&teamId=", team_id, "&scoringPeriodId=", week, "&seasonId=",
                   season, "&view=scoringperiod&version=quick")
 
-    page <- read_html(url)
+    page <- xml2::read_html(url)
 
     name <- page %>%
-      html_nodes("#teamInfos div:nth-child(1) div .bodyCopy div b") %>%
-      html_text()
+      rvest::html_nodes("#teamInfos div:nth-child(1) div .bodyCopy div b") %>%
+      rvest::html_text()
 
     starters <- page %>%
-      html_nodes("#playertable_0") %>%
-      html_table(fill = T) %>%
+      rvest::html_nodes("#playertable_0") %>%
+      rvest::html_table(fill = T) %>%
       flatten_dfc() %>%
       select(1, 2, 5) %>%
       slice(-c(1:3)) %>%
@@ -133,8 +133,8 @@ scrape_team <- function(week, team_id, league, league_id, season = 2018) {
       select(Player, Position, Lineup, Points)
 
     bench <- page %>%
-      html_nodes("#playertable_1") %>%
-      html_table() %>%
+      rvest::html_nodes("#playertable_1") %>%
+      rvest::html_table() %>%
       flatten_dfc() %>%
       select(1, 2, 5) %>%
       slice(-1) %>%
