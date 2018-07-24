@@ -26,8 +26,6 @@ calculate_colley <- function(schedule, scores) {
     mutate(W = str_count(outcomes, "W"),
            L = str_count(outcomes, "L"),
            t = W + L,
-           Percent = percent(W/t),
-           Record = paste(W, L, sep = "-"),
            C = t + 2,
            b = 1 + (W - L) / 2)
 
@@ -56,6 +54,6 @@ calculate_colley <- function(schedule, scores) {
              as.numeric() %>%
              round(4),
            Rank = min_rank(-Rating)) %>%
-    select(Team1, Record, Percent, Rating, Rank) %>%
-    arrange(Rank)
+    select(Team = Team1, Rating, `Colley Rank` = Rank) %>%
+    arrange(`Colley Rank`)
 }
