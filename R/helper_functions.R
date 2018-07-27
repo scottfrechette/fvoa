@@ -162,3 +162,14 @@ wide_format <- function(df, old, ..., sep = ",")  {
     mutate_if(is.character, factor)
 
 }
+
+select_rankings <- function(df, ...) {
+  columns <- quos(...)
+
+  if(length(columns) == 0) {
+    z
+  } else {
+    z %>%
+      select(!!! columns)
+  }
+}
