@@ -84,7 +84,7 @@ weighted_sd <- function (x, weights = NULL, normwt = FALSE,
   sqrt(sum(weights * ((x - xbar)^2))/(sw - 1))
 }
 
-convert_odds <- function(x) {
+prob_to_odds <- function(x) {
   # convert decimal to whole number
   if (x < 1)
     x <- x * 100
@@ -114,7 +114,7 @@ convert_odds <- function(x) {
   }
 } # Convert win percentage dataframe to winning odds
 
-convert_win_prob <- function(x) {
+odds_to_prob <- function(x) {
   x <- gsub("\\+", "", x)
   x <- as.numeric(x)
   if (is.na(x)){
@@ -128,11 +128,23 @@ convert_win_prob <- function(x) {
   convert_percent(x)
 } # convert odds to win percentage
 
-convert_percent <- function (x) {
+format_pct <- function (x) {
   paste0(round(x * 100, 1), "%")
-} # convert number to percent
+} # convert number to percent format
 
-long_format <- function(df, new, ...) {
+count_to_pct <- function(df, ..., col = n) {
+
+  grouping_vars_expr <- quos(...)
+  col_expr <- enquo(col)
+
+  df %>%
+    group_by(!!! grouping_vars_expr) %>%
+    mutate(pct = (!! col_expr) / sum(!! col_expr)) %>%
+    ungroup()
+
+} # convert count to percent (can group)
+
+wide_to_long <- function(df, new, ...) {
 
   new_name = enquo(new) %>% quo_name()
   old_cols = quos(...)
@@ -147,7 +159,7 @@ long_format <- function(df, new, ...) {
 
 }
 
-wide_format <- function(df, old, ..., sep = ",")  {
+long_to_wide <- function(df, old, ..., sep = ",")  {
 
   old_col = enquo(old)
   new_col = rlang::quo_text(old_col)
@@ -156,9 +168,9 @@ wide_format <- function(df, old, ..., sep = ",")  {
 
   df  %>%
     group_by(!!!grouping) %>%
-    summarise(tmp = paste(!!old_col, collapse = ",")) %>%
+    summarise(tmp = paste(!!old_col, collapse = sep)) %>%
     ungroup() %>%
-    separate(tmp, into = paste0(new_col, 1:2), sep = ",") %>%
+    separate(tmp, into = paste0(new_col, 1:2), sep = sep) %>%
     mutate_if(is.character, factor)
 
 }
