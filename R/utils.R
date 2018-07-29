@@ -86,21 +86,25 @@ weighted_sd <- function (x, weights = NULL, normwt = FALSE,
 
 prob_to_odds <- function(x) {
   # convert decimal to whole number
-  if (x < 1)
+  if (x < 1) {
     x <- x * 100
+  }
 
-  if (!is.numeric(x))
+  if (!is.numeric(x)) {
     x <- as.numeric(x)
+  }
 
   # convert to American odds
   x <- 100/x
 
   # convert favorite to American odds
-  if (x >= 2 & !is.na(x))
+  if (x >= 2 & !is.na(x)) {
     x <- (x - 1)* 100
+  }
   # convert underdog to American odds
-  if (x < 2 & !is.na(x))
+  if (x < 2 & !is.na(x)) {
     x <- (-100) / (x - 1)
+  }
 
   # round to whole number
   x <- round(x * 0.04)/0.04
@@ -108,7 +112,7 @@ prob_to_odds <- function(x) {
   if (is.na(x)) {
     NA
   } else if (x < 0) {
-    x
+    paste(x)
   } else {
     paste0("+", x)
   }
