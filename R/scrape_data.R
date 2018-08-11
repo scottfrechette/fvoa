@@ -52,7 +52,7 @@ scrape_schedule <- function(league, league_id, format = "wide") {
 
 }
 
-scrape_team <- function(week, team_id, league, league_id, season = 2018) {
+scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) {
 
   league <- stringr::str_to_lower(league)
 
@@ -155,10 +155,11 @@ scrape_team <- function(week, team_id, league, league_id, season = 2018) {
   }
 }
 
-extract_weekly_scores <- function(df) {
+extract_weekly_scores <- function(weekly_team_df) {
 
-  if("Points" %in% names(df)) {
-    df %>%
+  if("Points" %in% names(weekly_team_df)) {
+
+    weekly_team_df %>%
       filter(!Lineup %in% c("BN", "Bench")) %>%
       group_by(Week, Team) %>%
       summarise(Proj = sum(Proj),
@@ -166,7 +167,10 @@ extract_weekly_scores <- function(df) {
       distinct()
 
   } else {
-    df %>%
+
+    weekly_team_df %>%
       distinct(Week, Team, Score)
+
   }
+
 }
