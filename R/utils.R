@@ -166,7 +166,7 @@ wide_to_long <- function(df, new, ...) {
 long_to_wide <- function(df, old, ..., sep = ",")  {
 
   old_col = enquo(old)
-  new_col = rlang::quo_text(old_col)
+  new_col = quo_name(old_col)
   grouping = quos(...)
 
 
@@ -174,7 +174,7 @@ long_to_wide <- function(df, old, ..., sep = ",")  {
     group_by(!!!grouping) %>%
     summarise(tmp = paste(!!old_col, collapse = sep)) %>%
     ungroup() %>%
-    separate(tmp, into = paste0(new_col, 1:2), sep = sep) %>%
+    separate(tmp, into = paste0(new_col, 1:length(grouping)), sep = sep) %>%
     mutate_if(is.character, factor)
 
 }
