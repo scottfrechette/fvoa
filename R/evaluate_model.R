@@ -4,15 +4,20 @@
 
 evaluation_matchup <- function(actual_scores, model_scores) {
 
+  # actual_scores <- actual_scores %>% unnest()
+  # model_scores <- model_scores %>% unnest
+
   teams <- actual_scores %>% distinct(Team)
 
   matchup_evals <- crossing(teams %>% rename(Team1 = Team),
-           teams %>% rename(Team2 = Team)) %>%
+                            teams %>% rename(Team2 = Team)) %>%
     filter(Team1 != Team2) %>%
     left_join(actual_scores %>% rename(Score1 = Score),
               by = c("Team1" = "Team")) %>%
     left_join(actual_scores %>% rename(Score2 = Score),
               by = c("Team2" = "Team")) %>%
+    # left_join(model_scores,
+    #           by = c("Week")) %>%
     mutate(model_scores = list(model_scores),
            win_prob = pmap_dbl(list(model_scores, Team1, Team2), matchup),
            pred_outcome = if_else(win_prob > 50, 1, 0),
@@ -65,9 +70,10 @@ evaluation_matchup <- function(actual_scores, model_scores) {
              team_accuracy = list(team_accuracy))
 }
 
-evaluate_model <- function(scores, summary = T, details = F,
-                           shiny = F, save = F,
-                           reg_games = 6, reps = 1e6) {
+evaluate_model <- function(scores,
+                            summary = T, details = F,
+                            shiny = F, save = F,
+                            reg_games = 6, reps = 1e6) {
   set.seed(42)
 
   teams <- scores %>% distinct(Team)
@@ -77,9 +83,10 @@ evaluate_model <- function(scores, summary = T, details = F,
     mutate(scores = list(scores)) %>%
     unnest() %>%
     filter(Week1 < Week) %>%
-    select(-Week1) %>%
+    rename(join_week = Week,
+           Week = Week1) %>%
     arrange(Team) %>%
-    nest(Team:Score, .key = "model_scores")
+    nest(-join_week, .key = "model_scores")
 
   evaluation_df <- weeks %>%
     filter(Week != 1) %>%
@@ -88,7 +95,8 @@ evaluate_model <- function(scores, summary = T, details = F,
     filter(Week1 == Week) %>%
     select(-Week1) %>%
     nest(Team:Score, .key = "actual_scores") %>%
-    left_join(model_scores, by = "Week") %>%
+    # mutate(tmp = map(actual_scores, evaluation_matchup, model_scores)) %>%
+    left_join(model_scores, by = c("Week" = "join_week")) %>%
     mutate(tmp = map2(actual_scores, model_scores,
                       evaluation_matchup)) %>%
     unnest(tmp) %>%
@@ -110,15 +118,15 @@ evaluate_model <- function(scores, summary = T, details = F,
 
   brier_statement <- paste("The model got a final Brier score of", total_brier)
 
-  brier_breakdown <- brier_sims %>%
-    unnest() %>%
-    drop_na() %>%
-    filter(Week == nrow(brier_sims)) %>%
-    group_by(team) %>%
-    summarise(total = round(mean(brier), 2)) %>%
-    spread(team, total) %>%
-    map_dbl(sum) %>%
-    sort()
+  # brier_breakdown <- brier_sims %>%
+  #   unnest() %>%
+  #   drop_na() %>%
+  #   filter(Week == nrow(brier_sims)) %>%
+  #   group_by(team) %>%
+  #   summarise(total = round(mean(brier), 2)) %>%
+  #   spread(team, total) %>%
+  #   map_dbl(sum) %>%
+  #   sort()
 
   team_accuracy <- evaluation_df %>% unnest(team_accuracy)
 
@@ -175,17 +183,21 @@ evaluate_model <- function(scores, summary = T, details = F,
   plots <- cowplot::plot_grid(plot, perc_plot, nrow = 2)
 
   if(shiny) {
-    data_frame(x = weekly_sims) %>%
-      mutate(week = 1:length(weekly_sims)) %>%
-      slice(-1) %>%
-      unnest() %>%
-      write_csv("ff/model_eval.csv")
+    # data_frame(x = weekly_sims) %>%
+    #   mutate(week = 1:length(weekly_sims)) %>%
+    #   slice(-1) %>%
+    #   unnest() %>%
+    #   write_csv("ff/model_eval.csv")
+
+    list(statement, plot, team_accuracy) %>%
+      saveRDS("ff/model_eval.RDS")
   }
 
   if(save) {
 
     list(Weekly = weekly_sims, Team = team_accuracy, Tiers = perc_tiers,
-         Brier = brier_sims, Accuracy = statement, Plot = plots)
+         # Brier = brier_sims,
+         Accuracy = statement, Plot = plots)
 
   }
 
@@ -195,8 +207,8 @@ evaluate_model <- function(scores, summary = T, details = F,
     cat("\n")
     print(team_accuracy %>% filter(Week == max(Week)))
     cat("\n")
-    print(brier_breakdown)
-    cat("\n")
+    # print(brier_breakdown)
+    # cat("\n")
     print(perc_tiers_all)
     cat("\n")
 
