@@ -32,8 +32,8 @@ max_points_flex <- function(best_lineup, lineup_df, team, week,
   if(rb_wr) {
 
     chosen_players <- best_lineup %>%
-    unnest(Player) %>%
-    select(Player)
+      unnest(Player) %>%
+      select(Player)
 
     best_rb_wr <- lineup_df %>%
       anti_join(chosen_players, by = "Player") %>%
@@ -57,11 +57,11 @@ max_points_flex <- function(best_lineup, lineup_df, team, week,
     select(Player)
 
     best_flex <- lineup_df %>%
-    anti_join(chosen_players, by = "Player") %>%
-    filter(Position %in% c("RB", "WR", "TE")) %>%
-    top_n(roster_spots, Points) %>%
-    mutate(max_points = sum(Points),
-           position = "Flex") %>%
+      anti_join(chosen_players, by = "Player") %>%
+      filter(Position %in% c("RB", "WR", "TE")) %>%
+      top_n(roster_spots, Points) %>%
+      mutate(max_points = sum(Points),
+             position = "Flex") %>%
       nest(Player, .key = "Player") %>%
       select(Team, Week, position, max_points, Player)
 
