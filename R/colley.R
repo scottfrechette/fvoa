@@ -41,7 +41,7 @@ calculate_colley <- function(schedule, scores) {
 
   colley_invmat <- colley_df %>%
     select(Team1, outcomes) %>%
-    separate(outcomes, cc$Team1) %>%
+    separate(outcomes, colley_df$Team1) %>%
     gather(Team, value, -Team1) %>%
     mutate(x = map_dbl(value, colley_transform)) %>%
     select(-value) %>%
