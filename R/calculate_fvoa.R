@@ -1,4 +1,4 @@
-calculate_fvoa <- function(df) {
+calculate_fvoa <- function(scores) {
 
   all_matchups(df, type = "prob") %>%
     select(-Team) %>%
@@ -10,7 +10,7 @@ calculate_fvoa <- function(df) {
 
 }
 
-calculate_fvoa_season <- function(df) {
+calculate_fvoa_season <- function(scores) {
 
   fvoa <- list()
 
