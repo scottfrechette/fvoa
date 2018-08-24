@@ -27,7 +27,7 @@ calculate_stats <- function(schedule, scores, league = "Yahoo") {
               Tie = sum(Tie)) %>%
     mutate(Percent = round(Wins/(Wins + Losses + Tie), 3),
            `Yahoo Rank` = min_rank(Percent),
-           Percent = convert_percent(Percent)) %>%
+           Percent = format_pct(Percent)) %>%
     arrange(-Wins, -Score) %>%
     unite(Record, c(Wins, Losses, Tie), sep = "-")
 }

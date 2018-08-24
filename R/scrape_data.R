@@ -1,6 +1,6 @@
 scrape_schedule <- function(league, league_id, format = "wide") {
 
-  league <- stringr::str_to_lower(league)
+  league <- tolower(league)
 
   stopifnot(league %in% c("espn", "yahoo"),
             is.numeric(league_id),
@@ -19,30 +19,30 @@ scrape_schedule <- function(league, league_id, format = "wide") {
         rvest::html_nodes("#matchupweek .F-link") %>%
         rvest::html_text() %>%
         as_tibble() %>%
-        mutate(game_id = ceiling(row_number()/2))
+        mutate(Game_id = ceiling(row_number()/2))
 
       if(format == "wide") {
 
         schedule %>%
-          group_by(game_id) %>%
+          group_by(Game_id) %>%
           summarise(teams = paste(value, collapse = ",")) %>%
-          separate(teams, into = c("team1", "team2"), sep = ",")
+          separate(teams, into = c("Team1", "Team2"), sep = ",")
 
       } else if (format == "long") {
 
         schedule %>%
-          select(game_id, team = value)
+          select(Game_id, Team = value)
 
       }
 
     }
 
     data_frame(league_id = league_id,
-               week = 1:17, format = format) %>%
-      mutate(weekly_schedule = pmap(list(league_id, week, format), scrape_week)) %>%
+               Week = 1:17, format = format) %>%
+      mutate(weekly_schedule = pmap(list(league_id, Week, format), scrape_week)) %>%
       unnest() %>%
       select(-league_id, -format) %>%
-      mutate_at(vars(contains("team")), factor)
+      mutate_at(vars(contains("Team")), factor)
 
   } else if (league == "espn") {
 
@@ -54,7 +54,7 @@ scrape_schedule <- function(league, league_id, format = "wide") {
 
 scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) {
 
-  league <- stringr::str_to_lower(league)
+  league <- tolower(league)
 
   stopifnot(week %in% 1:17,
             team_id %in% 1:20,
