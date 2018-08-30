@@ -1,4 +1,7 @@
-scrape_schedule <- function(league, league_id, format = "wide") {
+
+# Main Functions ----------------------------------------------------------
+
+scrape_schedule <- function(league, league_id) {
 
   league <- tolower(league)
 
@@ -19,21 +22,8 @@ scrape_schedule <- function(league, league_id, format = "wide") {
         rvest::html_nodes("#matchupweek .F-link") %>%
         rvest::html_text() %>%
         as_tibble() %>%
-        mutate(Game_id = ceiling(row_number()/2))
-
-      if(format == "wide") {
-
-        schedule %>%
-          group_by(Game_id) %>%
-          summarise(teams = paste(value, collapse = ",")) %>%
-          separate(teams, into = c("Team1", "Team2"), sep = ",")
-
-      } else if (format == "long") {
-
-        schedule %>%
-          select(Game_id, Team = value)
-
-      }
+        mutate(Game_id = ceiling(row_number()/2)) %>%
+        select(Game_id, Team = value)
 
     }
 
@@ -51,6 +41,76 @@ scrape_schedule <- function(league, league_id, format = "wide") {
   }
 
 }
+
+scrape_team <- function(weeks, league, league_id, season = 2018) {
+
+  league <- tolower(league)
+
+  stopifnot(week %in% 1:17,
+            league %in% c("espn", "yahoo"),
+            is.numeric(league_id),
+            is.numeric(season)
+  )
+
+  if(league == "yahoo") {
+
+    yahoo_teamIDs(league_id) %>%
+      crossing(Week = 1:weeks) %>%
+      mutate(league = league,
+             league_id = league_id,
+             team = pmap(list(Week, team_id, league, league_id), scrape_weekly_team)) %>%
+      select(-league, -league_id, -Team)
+
+  } else {
+
+
+  }
+
+}
+
+scrape_win_prob <- function(weeks, league, league_id, season = 2018){
+
+  league <- tolower(league)
+
+  stopifnot(weeks %in% 1:17,
+            league %in% c("espn", "yahoo"),
+            is.numeric(league_id),
+            is.numeric(season)
+  )
+
+  if(league == "yahoo") {
+
+    yahoo_winprob <- function(week, league_id, team_id) {
+
+      url <- paste0("https://football.fantasysports.yahoo.com/f1/", league_id,
+                    "/matchup?week=", week, "&mid1=", team_id)
+
+      page <- xml2::read_html(url)
+
+      page %>%
+        html_nodes(".Pend-med") %>%
+        html_text() %>%
+        .[[2]]
+
+    }
+
+    yahoo_teamIDs(league_id) %>%
+      crossing(Week = 1:weeks) %>%
+      mutate(league = league,
+             league_id = league_id,
+             prob = pmap_chr(list(Week, league_id, team_id), yahoo_winprob),
+             type = str_extract(prob, "[:alpha:]*"),
+             win_prob = str_extract(prob, "[:digit:]+%")) %>%
+      select(Week, team_id, Team, type, win_prob)
+
+  } else {
+
+  }
+
+
+}
+
+# Helper Functions --------------------------------------------------------
 
 scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) {
 
@@ -80,6 +140,7 @@ scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) 
       rvest::html_table() %>%
       flatten_dfc() %>%
       select(1:5) %>%
+      mutate(`Fan Pts` = as.numeric(`Fan Pts`)) %>%
       filter(Pos != "Total")
 
     bench <- page %>%
@@ -103,6 +164,7 @@ scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) 
       mutate(Player = str_replace(Player, "\\s[:alpha:]+$", ""),
              Position = str_extract(Position, "[:alpha:]+"),
              Score = sum(starters$`Fan Pts`)) %>%
+      drop_na(Player) %>%
       select(Team:Score, Player:Position, Lineup, Proj, Points) %>%
       ungroup
 
@@ -172,5 +234,56 @@ extract_weekly_scores <- function(weekly_team_df) {
       distinct(Week, Team, Score)
 
   }
+
+}
+
+spread_schedule <- function(schedule, Week = Week,
+                            Game_id = Game_id) {
+
+  long_to_wide(schedule, Team, Week, Game_id)
+
+}
+
+gather_schedule <- function(schedule, Team = Team,
+                            Team1 = Team1, Team2 = Team2) {
+
+  wide_to_long(schedule, Team, Team1, Team2)
+
+  }
+
+
+valid_teamID <- function(id, league_id) {
+
+  url <- paste0("https://football.fantasysports.yahoo.com/f1/",
+                league_id, "/teams")
+
+  page <- xml2::read_html(url)
+
+  exists <- page %>%
+    html_nodes(str_glue(".team-{id}")) %>%
+    length() == 1
+
+  if(exists) {
+
+    page %>%
+      html_nodes(str_glue(".team-{id}")) %>%
+      html_text() %>%
+      as_tibble() %>%
+      mutate(Team = word(value, sep = "-")) %>%
+      pull(Team)
+
+  } else {
+    NA
+  }
+
+}
+
+yahoo_teamIDs <- function(league_id, id = 1:20) {
+
+  data_frame(team_id = id) %>%
+    mutate(league_id = league_id,
+           Team = map2_chr(team_id, league_id, valid_teamID)) %>%
+    filter(!is.na(Team)) %>%
+    select(team_id, Team)
 
 }
