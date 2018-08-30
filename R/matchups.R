@@ -128,19 +128,22 @@ current_matchups <- function(schedule, scores, week) {
     bind_rows(schedule %>%
                 rename(Team1 = Team2,
                        Team2 = Team1) %>%
-                select(Week, game_id, Team1, Team2)) %>%
+                select(Week, Game_id, Team1, Team2)) %>%
     filter(Week == week) %>%
     mutate(data = list(scores),
-           Prob = pmap_dbl(list(data, Team1, Team2), matchup)) %>%
-    filter(Prob >= 50) %>%
-    mutate(Line = map_dbl(Prob, convert_odds),
-           Prob = convert_percent(Prob/100),
+           fvoa_wp = pmap_dbl(list(data, Team1, Team2), matchup)) %>%
+    filter(fvoa_wp >= 50) %>%
+    mutate(Line = map_dbl(fvoa_wp, convert_odds),
+           fvoa_wp = convert_percent(fvoa_wp/100),
            Spread = pmap_chr(list(data, Team1, Team2, type = "spread"),
                              matchup1)) %>%
+    left_join(scrape_win_prob(1:week, "yahoo", 150019) %>% select(Team, yahoo_wp = win_prob),
+              by = c("Team1" = "Team")) %>%
     select(Winner = Team1,
            Loser = Team2,
            Spread,
-           `Win Probability` = Prob,
+           `FVOA Win Probability` = fvoa_wp,
+           `Yahoo Win Probability` = yahoo_wp,
            Line) %>%
     arrange(Line)
 
