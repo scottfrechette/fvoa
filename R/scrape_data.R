@@ -6,8 +6,7 @@ scrape_schedule <- function(league, league_id) {
   league <- tolower(league)
 
   stopifnot(league %in% c("espn", "yahoo"),
-            is.numeric(league_id),
-            format %in% c("wide", "long")
+            is.numeric(league_id)
   )
 
   if(league == "yahoo") {
