@@ -11,7 +11,7 @@ scrape_schedule <- function(league, league_id) {
 
   if(league == "yahoo") {
 
-    scrape_week <- function(league_id, week, format) {
+    scrape_week <- function(league_id, week) {
 
       url <- paste0("https://football.fantasysports.yahoo.com/f1/", league_id, "?week=", week)
 
@@ -27,11 +27,11 @@ scrape_schedule <- function(league, league_id) {
     }
 
     data_frame(league_id = league_id,
-               Week = 1:17, format = format) %>%
-      mutate(weekly_schedule = pmap(list(league_id, Week, format), scrape_week)) %>%
+               Week = 1:17) %>%
+      mutate(weekly_schedule = map2(league_id, Week, scrape_week)) %>%
       unnest() %>%
-      select(-league_id, -format) %>%
-      mutate_at(vars(contains("Team")), factor)
+      select(-league_id) %>%
+      mutate(Team =  factor(Team))
 
   } else if (league == "espn") {
 
