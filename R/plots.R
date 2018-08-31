@@ -125,27 +125,6 @@ team_evaluation <- function(df) {
     theme_fvoa() +
     theme(panel.grid.major.y = element_blank())
 }
-
-# To-Do:
-
-simulation_plot <- function(simulated_season_df, plot = c(Wins, Points, Percent)) {
-  plots <- data_frame(Wins = "Projected Wins by Week",
-                      Points = "Projected Total Points by Week",
-                      Percent = "Projected Chance of Making Playoffs by Week")
-
-  plot_quo <- enquo(plot[[1]])
-
-  simulated_season_df %>% ggplot(aes(Week, !! plot_quo, color = Team))
-    geom_line(size=1.5) +
-    geom_point(size = 2) +
-    stat_smooth(se=FALSE, method="lm", linetype = 2, size=0.5, color="grey") +
-    facet_wrap(~reorder(Team, Rank, FUN = last), ncol = 5) +
-    labs(y = "Wins", x = "Week", title = plots %>% pull(plot)) +
-    guides(color=FALSE) +
-    scale_y_continuous(breaks = scales::pretty_breaks(n = 5)) +
-    scale_x_continuous(breaks = c(1:15), limits = c(1, 15)) +
-    theme_fvoa()
-}
 playoff_leverage_plot <- function(scores, schedule, playoff_leverage_df) {
 
   sims <- max(playoff_leverage_df$sim)
@@ -174,7 +153,7 @@ playoff_leverage_plot <- function(scores, schedule, playoff_leverage_df) {
     rename(Winner = Team1) %>%
     nest(Team:Percent) %>%
     left_join(schedule %>%
-                filter(Week == 11) %>%
+                filter(Week == max(scores$Week) + 1) %>%
                 select(-Week) %>%
                 rename(Winner = Team1, Loser = Team2), by = "Winner") %>%
     select(Winner, Loser, data) %>%
@@ -193,7 +172,9 @@ playoff_leverage_plot <- function(scores, schedule, playoff_leverage_df) {
     # geom_text(aes(label = paste0(Delta, "%"), group = Team), color = "grey30", nudge_y = 5) +
     scale_y_continuous(limits = c(0, 105), breaks = c(0, 25, 50, 75, 100)) +
     guides(fill = FALSE) +
-    labs(x = "", y = "Chance to Make Playoffs", title = "Playoff Probability Leverage (Week 11)") +
+    labs(x = "",
+         y = "Chance to Make Playoffs",
+         title = str_glue("Playoff Probability Leverage (Week {max(scores$Week) + 1})")) +
     coord_flip() +
     theme(plot.title = element_text(hjust = 0.5),
           panel.background = element_blank(),
@@ -203,5 +184,23 @@ playoff_leverage_plot <- function(scores, schedule, playoff_leverage_df) {
           panel.grid.major.x = element_line(color = "grey90", size = 0.2),
           strip.text = element_text(size =12))
 }
+simulation_plot <- function(simulated_season_df, plot = c(Wins, Points, Percent)) {
+  plots <- data_frame(Wins = "Projected Wins by Week",
+                      Points = "Projected Total Points by Week",
+                      Percent = "Projected Chance of Making Playoffs by Week")
 
+  plot_quo <- enquo(plot)
 
+  simulated_season_df %>%
+    ggplot(aes(Week, !!plot_quo, color = Team)) +
+    geom_line(size=1.5) +
+    geom_point(size = 2) +
+    stat_smooth(se=FALSE, method="lm", linetype = 2, size=0.5, color="grey") +
+    facet_wrap(~reorder(Team, Rank, FUN = last), ncol = 5) +
+    labs(y = "Wins", x = "Week",
+         title = plots %>% pull(!!plot_quo)) +
+    guides(color=FALSE) +
+    scale_y_continuous(breaks = scales::pretty_breaks(n = 5)) +
+    scale_x_continuous(breaks = c(1:15), limits = c(1, 15)) +
+    theme_fvoa()
+}
