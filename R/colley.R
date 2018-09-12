@@ -1,16 +1,15 @@
 calculate_colley <- function(schedule, scores) {
 
-  if(nrow(schedule) < n_distinct(schedule$Week) *
-     schedule %>%
-     select_at(vars(contains("Team"))) %>%
-     select(1) %>% n_distinct()) {
-
-    schedule <- schedule %>%
-      bind_rows(schedule %>%
-                  rename(Team1 = Team2, Team2 = Team1) %>%
-                  select(Week, Team1, Team2)) %>%
-      arrange(Week, Team1)
+  if("Team" %in% names(schedule)) {
+    schedule <- spread_schedule(schedule)
   }
+
+  schedule_tmp <- schedule %>%
+    mutate_if(is.factor, as.character)
+  schedule_rev <- schedule_tmp %>%
+    select(Week, Game_id, Team1 = Team2, Team2 = Team1)
+  schedule <- bind_rows(schedule_tmp, schedule_rev) %>%
+    arrange(Week, Team1)
 
   colley_df <- schedule %>%
     left_join(scores, by = c("Week", "Team1" = "Team")) %>%
