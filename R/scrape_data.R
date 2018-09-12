@@ -71,7 +71,7 @@ scrape_win_prob <- function(week, league, league_id, season = 2018){
 
   league <- tolower(league)
 
-  stopifnot(weeks %in% 1:17,
+  stopifnot(week %in% 1:17,
             league %in% c("espn", "yahoo"),
             is.numeric(league_id),
             is.numeric(season)
