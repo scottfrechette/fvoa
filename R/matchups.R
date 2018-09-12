@@ -124,20 +124,28 @@ all_matchups <- function(scores, type = "prob",
 
 current_matchups <- function(schedule, scores, week) {
 
+  if("Team" %in% names(schedule)) {
+    schedule <- spread_schedule(schedule)
+  }
+
+  schedule_tmp <- schedule %>%
+    mutate_if(is.factor, as.character)
+  schedule_rev <- schedule_tmp %>%
+    select(Week, Game_id, Team1 = Team2, Team2 = Team1)
+  schedule <- bind_rows(schedule_tmp, schedule_rev) %>%
+    arrange(Week, Team1)
+
   schedule %>%
-    bind_rows(schedule %>%
-                rename(Team1 = Team2,
-                       Team2 = Team1) %>%
-                select(Week, Game_id, Team1, Team2)) %>%
     filter(Week == week) %>%
     mutate(data = list(scores),
            fvoa_wp = pmap_dbl(list(data, Team1, Team2), matchup)) %>%
     filter(fvoa_wp >= 50) %>%
-    mutate(Line = map_dbl(fvoa_wp, convert_odds),
-           fvoa_wp = convert_percent(fvoa_wp/100),
+    mutate(Line = map_chr(fvoa_wp, prob_to_odds),
+           fvoa_wp = format_pct(fvoa_wp/100),
            Spread = pmap_chr(list(data, Team1, Team2, type = "spread"),
-                             matchup1)) %>%
-    left_join(scrape_win_prob(1:week, "yahoo", 150019) %>% select(Team, yahoo_wp = win_prob),
+                             matchup)) %>%
+    left_join(scrape_win_prob(week, "yahoo", 150019) %>%
+                select(Team, yahoo_wp = win_prob),
               by = c("Team1" = "Team")) %>%
     select(Winner = Team1,
            Loser = Team2,
