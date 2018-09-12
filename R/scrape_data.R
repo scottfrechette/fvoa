@@ -225,7 +225,8 @@ extract_weekly_scores <- function(weekly_team_df) {
       group_by(Week, Team) %>%
       summarise(Proj = sum(Proj),
                 Score = sum(Points)) %>%
-      distinct()
+      distinct() %>%
+      ungroup()
 
   } else {
 
@@ -259,14 +260,14 @@ valid_teamID <- function(id, league_id) {
   page <- xml2::read_html(url)
 
   exists <- page %>%
-    html_nodes(str_glue(".team-{id}")) %>%
+    rvest::html_nodes(str_glue(".team-{id}")) %>%
     length() == 1
 
   if(exists) {
 
     page %>%
-      html_nodes(str_glue(".team-{id}")) %>%
-      html_text() %>%
+      rvest::html_nodes(str_glue(".team-{id}")) %>%
+      rvest::html_text() %>%
       as_tibble() %>%
       mutate(Team = word(value, sep = "-")) %>%
       pull(Team)
