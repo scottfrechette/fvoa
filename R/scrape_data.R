@@ -13,7 +13,7 @@ scrape_schedule <- function(league, league_id) {
 
     scrape_week <- function(league_id, week) {
 
-      url <- paste0("https://football.fantasysports.yahoo.com/f1/", league_id, "?week=", week)
+      url <- paste0("https://football.fantasysports.yahoo.com/f1/", league_id, "?matchup_week=", week)
 
       page <- xml2::read_html(url)
 
