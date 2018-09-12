@@ -67,7 +67,7 @@ scrape_team <- function(weeks, league, league_id, season = 2018) {
 
 }
 
-scrape_win_prob <- function(weeks, league, league_id, season = 2018){
+scrape_win_prob <- function(week, league, league_id, season = 2018){
 
   league <- tolower(league)
 
@@ -94,13 +94,13 @@ scrape_win_prob <- function(weeks, league, league_id, season = 2018){
     }
 
     yahoo_teamIDs(league_id) %>%
-      crossing(Week = 1:weeks) %>%
+      crossing(week) %>%
       mutate(league = league,
              league_id = league_id,
-             prob = pmap_chr(list(Week, league_id, team_id), yahoo_winprob),
+             prob = pmap_chr(list(week, league_id, team_id), yahoo_winprob),
              type = str_extract(prob, "[:alpha:]*"),
              win_prob = str_extract(prob, "[:digit:]+%")) %>%
-      select(Week, team_id, Team, type, win_prob)
+      select(team_id, Team, type, win_prob)
 
   } else {
 
@@ -108,7 +108,6 @@ scrape_win_prob <- function(weeks, league, league_id, season = 2018){
 
 
 }
-
 # Helper Functions --------------------------------------------------------
 
 scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) {
