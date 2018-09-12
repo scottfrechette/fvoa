@@ -2,6 +2,10 @@ simulate_season <- function(schedule, scores,
                             sims = 1000, reg_games = 6,
                             progress = FALSE) {
 
+  if("Team" %in% names(schedule)) {
+    schedule <- spread_schedule(schedule)
+  }
+
   # Identify league, teams, and weeks played
 
   teams <- scores %>% distinct(Team) %>% pull()
@@ -172,7 +176,7 @@ simulate_season <- function(schedule, scores,
                                  arrange(-Wins, -Points))
 
         # Add tick for each simulation
-        if(exists(pb)) {
+        if(exists("pb")) {
           pb$tick()
           Sys.sleep(1/100)
         }
