@@ -45,7 +45,7 @@ scrape_team <- function(weeks, league, league_id, season = 2018) {
 
   league <- tolower(league)
 
-  stopifnot(week %in% 1:17,
+  stopifnot(weeks %in% 1:17,
             league %in% c("espn", "yahoo"),
             is.numeric(league_id),
             is.numeric(season)
@@ -162,7 +162,7 @@ scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) 
       separate(Player, c("Player", "Position"), " - ") %>%
       mutate(Player = str_replace(Player, "\\s[:alpha:]+$", ""),
              Position = str_extract(Position, "[:alpha:]+"),
-             Score = sum(starters$`Fan Pts`)) %>%
+             Score = sum(starters$`Fan Pts`, na.rm = T)) %>%
       drop_na(Player) %>%
       select(Team:Score, Player:Position, Lineup, Proj, Points) %>%
       ungroup
