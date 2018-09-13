@@ -26,13 +26,14 @@ calculate_stats <- function(schedule, scores, league = "Yahoo") {
                          if_else(x == "Team2" & score2 - score1 > 0, 1, 0)),
            Lose = if_else(Tie == 0 & Win == 0, 1, 0)) %>%
     group_by(Team) %>%
-    summarise(Score = sum(score),
+    summarise(Points = sum(score),
               Wins = sum(Win),
               Losses = sum(Lose),
               Tie = sum(Tie)) %>%
-    mutate(Percent = round(Wins/(Wins + Losses + Tie), 3),
-           `Yahoo Rank` = min_rank(-Percent),
+    mutate(Percent = round(Wins/(Wins + Losses + Tie), 3)) %>%
+    arrange(-Wins, -Points) %>%
+    mutate(`Yahoo Rank` = row_number(),
            Percent = format_pct(Percent)) %>%
-    arrange(-Wins, -Score) %>%
+    arrange(-Wins, -Points) %>%
     unite(Record, c(Wins, Losses, Tie), sep = "-")
 }

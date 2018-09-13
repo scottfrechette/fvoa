@@ -53,6 +53,6 @@ calculate_colley <- function(schedule, scores) {
              as.numeric() %>%
              round(4),
            Rank = min_rank(-Rating)) %>%
-    select(Team = Team1, Rating, `Colley Rank` = Rank) %>%
+    select(Team = Team1, `Colley Rating` = Rating, `Colley Rank` = Rank) %>%
     arrange(`Colley Rank`)
 }
