@@ -129,6 +129,16 @@ playoff_leverage_plot <- function(scores, schedule, playoff_leverage_df) {
 
   sims <- max(playoff_leverage_df$sim)
 
+  if("Team" %in% names(schedule)) {
+    schedule <- spread_schedule(schedule)
+  }
+  schedule_tmp <- schedule %>%
+    mutate_if(is.factor, as.character)
+  schedule_rev <- schedule_tmp %>%
+    select(Week, Game_id, Team1 = Team2, Team2 = Team1)
+  schedule <- bind_rows(schedule_tmp, schedule_rev) %>%
+    arrange(Week, Team1)
+
   schedule %>%
     filter(Week == max(scores$Week) + 1) %>%
     mutate(tmp = list(playoff_leverage_df)) %>%
