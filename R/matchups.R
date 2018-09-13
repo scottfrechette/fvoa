@@ -150,8 +150,8 @@ current_matchups <- function(schedule, scores, week) {
     select(Winner = Team1,
            Loser = Team2,
            Spread,
-           `FVOA Win Probability` = fvoa_wp,
-           `Yahoo Win Probability` = yahoo_wp,
+           FVOA = fvoa_wp,
+           Yahoo = yahoo_wp,
            Line) %>%
     arrange(Line)
 
