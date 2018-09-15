@@ -136,7 +136,7 @@ scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) 
     starters <- page %>%
       rvest::html_nodes("#statTable1") %>%
       rvest::html_table() %>%
-      flatten_dfc() %>%
+      purrr::flatten_dfc() %>%
       select(1:5) %>%
       mutate(`Fan Pts` = as.numeric(`Fan Pts`)) %>%
       filter(Pos != "Total")
@@ -144,7 +144,7 @@ scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) 
     bench <- page %>%
       rvest::html_nodes("#statTable2") %>%
       rvest::html_table(fill = T) %>%
-      flatten_dfc() %>%
+      purrr::flatten_dfc() %>%
       select(1:5) %>%
       mutate(Proj = as.numeric(Proj),
              `Fan Pts` = as.numeric(`Fan Pts`)) %>%
@@ -181,7 +181,7 @@ scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) 
     starters <- page %>%
       rvest::html_nodes("#playertable_0") %>%
       rvest::html_table(fill = T) %>%
-      flatten_dfc() %>%
+      purrr::flatten_dfc() %>%
       select(1, 2, 5) %>%
       slice(-c(1:3)) %>%
       set_names("Lineup", "Player", "Points") %>%
@@ -195,7 +195,7 @@ scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) 
     bench <- page %>%
       rvest::html_nodes("#playertable_1") %>%
       rvest::html_table() %>%
-      flatten_dfc() %>%
+      purrr::flatten_dfc() %>%
       select(1, 2, 5) %>%
       slice(-1) %>%
       set_names("Lineup", "Player", "Points") %>%
