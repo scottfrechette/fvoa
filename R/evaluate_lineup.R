@@ -106,7 +106,7 @@ evaluate_lineup <- function(lineup_df, qb = 1, rb = 2,
   teams <- lineup_df %>%
     filter(!is.na(Team)) %>%
     distinct(Team)
-  weeks <- scores %>% distinct(Week)
+  weeks <- lineup_df %>% distinct(Week)
   positions <- data_frame(qb, rb, wr, te,
                           dst, k, dl, db) %>%
     gather(position, roster_spots) %>%
