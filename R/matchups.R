@@ -140,8 +140,9 @@ current_matchups <- function(week, schedule, scores, win_prob) {
     mutate(data = list(scores),
            fvoa_wp = pmap_dbl(list(data, Team1, Team2), matchup)) %>%
     filter(fvoa_wp >= 50) %>%
+    arrange(-fvoa_wp) %>%
     mutate(Line = map_chr(fvoa_wp, prob_to_odds),
-           fvoa_wp = format_pct(fvoa_wp/100),
+           fvoa_wp = round(fvoa_wp/100, 2) %>% format_pct,
            Spread = pmap_chr(list(data, Team1, Team2, type = "spread"),
                              matchup)) %>%
     left_join(win_prob %>%
@@ -149,11 +150,10 @@ current_matchups <- function(week, schedule, scores, win_prob) {
               by = c("Team1" = "Team")) %>%
     select(Winner = Team1,
            Loser = Team2,
-           Spread,
            FVOA = fvoa_wp,
            Yahoo = yahoo_wp,
-           Line) %>%
-    arrange(Line)
+           Spread,
+           Line)
 
 }
 
