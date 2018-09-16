@@ -1,4 +1,4 @@
-simulate_season <- function(schedule, scores,
+simulate_season <- function(schedule, scores, league,
                             sims = 1000, reg_games = 6,
                             progress = FALSE) {
 
@@ -11,10 +11,7 @@ simulate_season <- function(schedule, scores,
   teams <- scores %>% distinct(Team) %>% pull()
   weeks_played <- max(scores$Week)
 
-  league_quo <- enquo(schedule)
-  league <- str_split(quo_name(league_quo), "_", simplify = TRUE)[[1]]
-
-  file_simulation <- paste0(league, "_simulated_season", ".csv")
+  file_simulation <- here::here("clt", paste0(league, "_simulated_season", ".csv"))
 
   # Load previous simulations unless week 1 not run yet
   if (length(weeks_played) == 1) {
@@ -75,7 +72,6 @@ simulate_season <- function(schedule, scores,
 
       # Save full season to CSV
       write_csv(simulated_season, file_simulation)
-      # write_csv(simulated_season, "ff/simulated_seasons.csv")
 
     } else {
 
@@ -186,7 +182,7 @@ simulate_season <- function(schedule, scores,
       write_csv(data_frame(sim_seasons) %>%
                   mutate(sim = row_number()) %>%
                   unnest(),
-                "playoff_leverage.csv")
+                here::here(league, "playoff_leverage.csv"))
 
       # Tidy simulated data for reporting/visualizing after all simulations run
       final_df <- data_frame(sim_seasons) %>%
@@ -223,7 +219,7 @@ simulate_season <- function(schedule, scores,
         simulated_season <- bind_rows(previous_simulations, final_df)
 
         # Save simulated season to CSV
-        write_csv(simulated_season, paste0(file_simulation))
+        write_csv(simulated_season, file_simulation)
       }
     }
   }
