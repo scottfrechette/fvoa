@@ -11,7 +11,7 @@ simulate_season <- function(schedule, scores, league,
   teams <- scores %>% distinct(Team) %>% pull()
   weeks_played <- max(scores$Week)
 
-  file_simulation <- here::here("clt", paste0(league, "_simulated_season", ".csv"))
+  file_simulation <- here::here(league, paste0(league, "_simulated_season", ".csv"))
 
   # Load previous simulations unless week 1 not run yet
   if (length(weeks_played) == 1) {
