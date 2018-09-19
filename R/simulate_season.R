@@ -6,6 +6,13 @@ simulate_season <- function(schedule, scores, league,
     schedule <- spread_schedule(schedule)
   }
 
+  schedule_tmp <- schedule %>%
+    mutate_if(is.factor, as.character)
+  schedule_rev <- schedule_tmp %>%
+    select(Week, Game_id, Team1 = Team2, Team2 = Team1)
+  schedule <- bind_rows(schedule_tmp, schedule_rev) %>%
+    arrange(Week, Team1)
+
   # Identify league, teams, and weeks played
 
   teams <- scores %>% distinct(Team) %>% pull()
