@@ -178,7 +178,7 @@ evaluate_model <- function(scores,
     scale_y_continuous(limits = c(30, 100)) +
     labs(x = "Tier", y = "Percent Correct",
          title = "Calibration of Weekly Predictions") +
-    ff_theme()
+    theme_fvoa()
 
   plots <- cowplot::plot_grid(plot, perc_plot, nrow = 2)
 
