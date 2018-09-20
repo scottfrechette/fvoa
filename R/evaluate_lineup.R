@@ -10,7 +10,7 @@ max_points_position <- function(lineup_df, team, week,
 
   lineup_df %>%
     filter(Team %in% c(team, NA),
-           # Week == week,
+           Week == week,
            Position == position) %>%
     top_n(roster_spots, Points) %>%
     mutate(max_points = sum(Points)) %>%
