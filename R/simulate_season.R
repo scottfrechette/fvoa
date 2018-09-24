@@ -210,7 +210,7 @@ simulate_season <- function(schedule, scores, league,
                   Wins = round(mean(Wins), 1),
                   Percent = sum(playoffs)/sims * 100) %>%
         arrange(-Percent, -Wins, -Points) %>%
-        mutate(Rank = 1L:10L,
+        mutate(Rank = 1L:length(teams),
                Week = max(scores$Week))
 
       if (!file.exists(file_simulation)) {
