@@ -46,7 +46,8 @@ scrape_schedule <- function(league, league_id) {
       as_tibble() %>%
       select(1, 4) %>%
       mutate(Week = str_extract(X1, "WEEK.*") %>%
-               str_remove("WEEK "),
+               str_remove("WEEK ") %>%
+               as.integer(),
              Team1 = str_remove(X1, " \\(.*$"),
              Team2 = str_remove(X4, " \\(.*$")) %>%
       fill(Week) %>%
