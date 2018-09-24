@@ -35,7 +35,28 @@ scrape_schedule <- function(league, league_id) {
 
   } else if (league == "espn") {
 
-    paste("not ready yet")
+    url <- paste0("http://games.espn.com/ffl/schedule?leagueId=", league_id)
+
+    page <- xml2::read_html(url)
+
+    page %>%
+      html_nodes("table") %>%
+      .[[2]] %>%
+      html_table() %>%
+      as_tibble() %>%
+      select(1, 4) %>%
+      mutate(Week = str_extract(X1, "WEEK.*") %>%
+               str_remove("WEEK "),
+             Team1 = str_remove(X1, " \\(.*$"),
+             Team2 = str_remove(X4, " \\(.*$")) %>%
+      fill(Week) %>%
+      filter(X1 != "",
+             X1 != "AWAY TEAM",
+             !str_detect(X4, "WEEK")) %>%
+      group_by(Week) %>%
+      mutate(Game_id = row_number()) %>%
+      ungroup() %>%
+      select(Week, Game_id, Team1, Team2)
 
   }
 
@@ -62,7 +83,12 @@ scrape_team <- function(weeks, league, league_id, season = 2018) {
 
   } else {
 
-
+    espn_teamIDs(league_id) %>%
+      crossing(Week = 1:weeks) %>%
+      mutate(league = league,
+             league_id = league_id,
+             team = pmap(list(Week, team_id, league, league_id), scrape_weekly_team)) %>%
+      select(-league, -league_id)
   }
 
 }
@@ -217,7 +243,7 @@ scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) 
 
 extract_weekly_scores <- function(weekly_team_df) {
 
-  if("Points" %in% names(weekly_team_df)) {
+  if("Proj" %in% names(weekly_team_df)) {
 
     weekly_team_df %>%
       filter(!Lineup %in% c("BN", "Bench")) %>%
@@ -230,6 +256,7 @@ extract_weekly_scores <- function(weekly_team_df) {
   } else {
 
     weekly_team_df %>%
+      unnest() %>%
       distinct(Week, Team, Score)
 
   }
@@ -284,5 +311,29 @@ yahoo_teamIDs <- function(league_id, id = 1:20) {
            Team = map2_chr(team_id, league_id, valid_teamID)) %>%
     filter(!is.na(Team)) %>%
     select(team_id, Team)
+
+}
+
+espn_teamIDs <- function(league_id, id = 1:20) {
+
+
+  valid_espnID <- function(id, league_id) {
+
+    url <- paste0("http://games.espn.com/ffl/clubhouse?leagueId=", league_id,
+                  "&teamId=", id)
+
+    page <- xml2::read_html(url)
+
+    page %>%
+      rvest::html_nodes("h3") %>%
+      length() == 1
+
+  }
+
+  data_frame(team_id = id) %>%
+    mutate(league_id = league_id,
+           Team = map2_lgl(id, league_id, valid_espnID)) %>%
+    filter(Team) %>%
+    select(team_id)
 
 }
