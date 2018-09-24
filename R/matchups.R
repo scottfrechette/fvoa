@@ -122,7 +122,7 @@ all_matchups <- function(scores, type = "prob",
 
 }
 
-current_matchups <- function(week, schedule, scores, win_prob) {
+current_matchups <- function(week, schedule, scores, win_prob = NULL) {
 
   if("Team" %in% names(schedule)) {
     schedule <- spread_schedule(schedule)
@@ -135,7 +135,7 @@ current_matchups <- function(week, schedule, scores, win_prob) {
   schedule <- bind_rows(schedule_tmp, schedule_rev) %>%
     arrange(Week, Team1)
 
-  schedule %>%
+  current_matchups <- schedule %>%
     filter(Week == week) %>%
     mutate(data = list(scores),
            fvoa_wp = pmap_dbl(list(data, Team1, Team2), matchup)) %>%
@@ -145,16 +145,23 @@ current_matchups <- function(week, schedule, scores, win_prob) {
            fvoa_wp = round(fvoa_wp/100, 2) %>% format_pct,
            Spread = pmap_chr(list(data, Team1, Team2, type = "spread"),
                              matchup)) %>%
-    left_join(win_prob %>%
-                rename(yahoo_wp = win_prob),
-              by = c("Team1" = "Team")) %>%
     select(Winner = Team1,
            Loser = Team2,
            FVOA = fvoa_wp,
-           Yahoo = yahoo_wp,
            Spread,
            Line)
 
+  if(!is.null(win_prob)) {
+    current_matchups <- current_matchups %>%
+      left_join(win_prob %>%
+                  rename(yahoo_wp = win_prob),
+                by = c("Team1" = "Team")) %>%
+      select(Winner, Loser, FVOA,
+             Yahoo = yahoo_wp,
+             Spread, Line)
+  }
+
+  current_matchups
 }
 
 
