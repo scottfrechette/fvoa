@@ -89,7 +89,7 @@ scrape_team <- function(weeks, league, league_id, season = 2018) {
       mutate(league = league,
              league_id = league_id,
              team = pmap(list(Week, team_id, league, league_id), scrape_weekly_team)) %>%
-      select(-league, -league_id)
+      select(-league, -league_id, -Team)
   }
 
 }
@@ -325,16 +325,25 @@ espn_teamIDs <- function(league_id, id = 1:20) {
 
     page <- xml2::read_html(url)
 
-    page %>%
+    exists <- page %>%
       rvest::html_nodes("h3") %>%
       length() == 1
+
+    if(exists) {
+      page %>%
+        rvest::html_nodes("h3") %>%
+        html_text() %>%
+        str_remove(" \\(.*$")
+    } else {
+      NA
+    }
 
   }
 
   data_frame(team_id = id) %>%
     mutate(league_id = league_id,
-           Team = map2_lgl(id, league_id, valid_espnID)) %>%
-    filter(Team) %>%
-    select(team_id)
+           Team = map2_chr(id, league_id, valid_espnID)) %>%
+    filter(!is.na(Team)) %>%
+    select(team_id, Team)
 
 }
