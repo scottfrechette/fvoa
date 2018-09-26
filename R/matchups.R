@@ -155,7 +155,7 @@ current_matchups <- function(week, schedule, scores, win_prob = NULL) {
     current_matchups <- current_matchups %>%
       left_join(win_prob %>%
                   rename(yahoo_wp = win_prob),
-                by = c("Team1" = "Team")) %>%
+                by = c("Winner" = "Team")) %>%
       select(Winner, Loser, FVOA,
              Yahoo = yahoo_wp,
              Spread, Line)
