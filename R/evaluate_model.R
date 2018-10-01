@@ -71,9 +71,11 @@ evaluation_matchup <- function(actual_scores, model_scores) {
 }
 
 evaluate_model <- function(scores,
-                            summary = T, details = F,
-                            shiny = F, save = F,
-                            reg_games = 6, reps = 1e6) {
+                           output = c("shiny", "summary", "details"),
+                           reg_games = 6, reps = 1e6) {
+
+  output <- output[[1]]
+
   set.seed(42)
 
   teams <- scores %>% distinct(Team)
@@ -180,28 +182,30 @@ evaluate_model <- function(scores,
          title = "Calibration of Weekly Predictions") +
     theme_fvoa()
 
-  plots <- cowplot::plot_grid(plot, perc_plot, nrow = 2)
+  if(output == "shiny") {
 
-  if(shiny) {
-    # data_frame(x = weekly_sims) %>%
-    #   mutate(week = 1:length(weekly_sims)) %>%
-    #   slice(-1) %>%
-    #   unnest() %>%
-    #   write_csv("ff/model_eval.csv")
+    list(statement = statement, plot = plot, team_accuracy = team_accuracy)
 
-    list(statement, plot, team_accuracy) %>%
-      saveRDS("ff/model_eval.RDS")
-  }
+  } else if (output == "summary") {
 
-  if(save) {
+    if("cowplot" %in% rownames(installed.packages())) {
 
-    list(Weekly = weekly_sims, Team = team_accuracy, Tiers = perc_tiers,
-         # Brier = brier_sims,
-         Accuracy = statement, Plot = plots)
+      plots <- cowplot::plot_grid(plot, perc_plot, nrow = 2)
 
-  }
 
-  if(details) {
+    } else if ("gridExtra" %in% rownames(installed.packages())) {
+
+      plots <- gridExtra::arrangeGrob(plot, perc_plot)
+
+    }
+
+    print(statement)
+    cat("\n")
+    print(brier_statement)
+    cat("\n")
+    print(plots)
+
+  } else {
 
     print(weekly_sims[[length(weekly_sims)]])
     cat("\n")
@@ -211,16 +215,6 @@ evaluate_model <- function(scores,
     # cat("\n")
     print(perc_tiers_all)
     cat("\n")
-
-  }
-
-  if(summary) {
-
-    print(statement)
-    cat("\n")
-    print(brier_statement)
-    cat("\n")
-    print(plots)
 
   }
 
