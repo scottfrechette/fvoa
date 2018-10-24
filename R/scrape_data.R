@@ -166,6 +166,7 @@ scrape_weekly_team <- function(week, team_id, league, league_id, season = 2018) 
       purrr::flatten_dfc() %>%
       select(1:5) %>%
       mutate(`Fan Pts` = as.numeric(`Fan Pts`)) %>%
+      replace_na(list(`Fan Pts` = 0)) %>%
       filter(Pos != "Total")
 
     bench <- page %>%
