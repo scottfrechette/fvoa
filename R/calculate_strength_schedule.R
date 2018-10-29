@@ -17,6 +17,6 @@ calculate_strength_schedule <- function(schedule, scores) {
     group_by(Team) %>%
     summarise(SoS = round(mean(FVOA), 2)) %>%
     arrange(SoS) %>%
-    mutate("SoS Rank" = 1:nrow(.))
+    mutate("SoS Rank" = min_rank(-SoS))
 
 }
