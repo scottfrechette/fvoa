@@ -1,9 +1,9 @@
 
-plot_quadrant <- function(league, league_id, id = NULL) {
+quadrant <- function(league, league_id, id = NULL) {
 
   if(league == "yahoo") {
 
-    print("Yahoo not added yet")
+    print("Yahoo not ready yet")
 
   } else {
 
@@ -46,7 +46,7 @@ plot_quadrant <- function(league, league_id, id = NULL) {
 
       df <- df %>%
         left_join(id, by = c("Owner" = "Team")) %>%
-        select(Team, Delta, Pct)
+        select(Owner = team, Delta, Pct)
 
     }
 
