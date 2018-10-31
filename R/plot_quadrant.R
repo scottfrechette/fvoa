@@ -1,5 +1,5 @@
 
-quadrant <- function(league, league_id, id = NULL) {
+plot_quadrant <- function(league, league_id, id = NULL) {
 
   if(league == "yahoo") {
 
