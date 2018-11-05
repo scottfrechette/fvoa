@@ -1,17 +1,16 @@
+#save_leverage = T
+#print_leverage = F
+#save_season = T
+#overwrite = F
+
 simulate_season <- function(schedule, scores, league,
                             sims = 1000, reg_games = 6,
                             progress = FALSE) {
 
   if("Team" %in% names(schedule)) {
-    schedule <- spread_schedule(schedule)
+    schedule <- spread_schedule(schedule) %>%
+      doublewide_schedule()
   }
-
-  schedule_tmp <- schedule %>%
-    mutate_if(is.factor, as.character)
-  schedule_rev <- schedule_tmp %>%
-    select(Week, Game_id, Team1 = Team2, Team2 = Team1)
-  schedule <- bind_rows(schedule_tmp, schedule_rev) %>%
-    arrange(Week, Team1)
 
   # Identify league, teams, and weeks played
 

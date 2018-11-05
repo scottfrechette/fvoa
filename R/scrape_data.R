@@ -279,6 +279,23 @@ gather_schedule <- function(schedule, Team = Team,
 
   }
 
+doublewide_schedule <- function(schedule) {
+
+  if("Team" %in% names(schedule)) {
+
+    schedule <- spread_schedule(schedule)
+
+  }
+
+  schedule_tmp <- schedule %>%
+    mutate_if(is.factor, as.character)
+  schedule_rev <- schedule_tmp %>%
+    select(Week, Game_id, Team1 = Team2, Team2 = Team1)
+  bind_rows(schedule_tmp, schedule_rev) %>%
+    arrange(Week, Team1) %>%
+    mutate_if(is.character, as.factor)
+
+}
 
 valid_teamID <- function(id, league_id) {
 
