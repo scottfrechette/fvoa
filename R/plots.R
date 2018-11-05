@@ -130,14 +130,10 @@ playoff_leverage_plot <- function(scores, schedule, playoff_leverage_df) {
   sims <- max(playoff_leverage_df$sim)
 
   if("Team" %in% names(schedule)) {
-    schedule <- spread_schedule(schedule)
+    schedule <- schedule %>%
+      spread_schedule() %>%
+      doublewide_schedule()
   }
-  schedule_tmp <- schedule %>%
-    mutate_if(is.factor, as.character)
-  schedule_rev <- schedule_tmp %>%
-    select(Week, Game_id, Team1 = Team2, Team2 = Team1)
-  schedule <- bind_rows(schedule_tmp, schedule_rev) %>%
-    arrange(Week, Team1)
 
   schedule %>%
     filter(Week == max(scores$Week) + 1) %>%
@@ -214,97 +210,34 @@ simulation_plot <- function(simulated_season_df, plot = c(Wins, Points, Percent)
     scale_x_continuous(breaks = c(1:15), limits = c(1, 15)) +
     theme_fvoa()
 }
-plot_quadrant <- function(league, league_id, id = NULL) {
-
-  if(league == "yahoo") {
-
-    url <- paste0("https://football.fantasysports.yahoo.com/f1/", league_id)
-
-    page <- xml2::read_html(url)
-
-    df <- page %>%
-      html_nodes("table") %>%
-      .[[2]] %>%
-      html_table() %>%
-      as_tibble() %>%
-      separate(3, into = c("W", "L", "T"), convert = T) %>%
-      mutate(Delta = `Pts For` - `Pts Agnst`,
-             Pct = W / (W + L + T)) %>%
-      select(Team, Delta, Pct)
-
-  } else {
-
-    url <- paste0("http://games.espn.com/ffl/standings?leagueId=", league_id)
-
-    page <- xml2::read_html(url)
-
-    record <- page %>%
-      html_nodes("table") %>%
-      .[[3]] %>%
-      html_table(header = T)
-
-    colnames(record) <- as.character(unlist(record[1,]))
-
-    record <- record %>%
-      slice(-1) %>%
-      as_tibble() %>%
-      mutate_at(vars(W, L, T, PCT, GB), as.numeric)
-
-    points <- page %>%
-      html_nodes("table") %>%
-      .[[4]] %>%
-      html_table(header = T)
-
-    colnames(points) <- as.character(unlist(points[1,]))
-
-    points <- points %>%
-      slice(-1) %>%
-      as_tibble() %>%
-      rename(Team = `TEAM, OWNER(S)`) %>%
-      mutate_at(vars(PF, PA), as.numeric) %>%
-      mutate(Team = str_extract(Team, "^[^\\(]+") %>% str_trim())
-
-    df <- points %>%
-      mutate(Delta = PF - PA) %>%
-      left_join(record, by = c("Team" = "TEAM")) %>%
-      select(Team, Delta, Pct = PCT)
-
-  }
-
-  if(!is.null(id)) {
-
-    df <- df %>%
-      left_join(id, by = "Team") %>%
-      select(Team = team, Delta, Pct)
-
-  }
+plot_quadrant <- function(df) {
 
   df %>%
-    ggplot(aes(Delta, Pct)) +
+    ggplot(aes(Delta, Win_Pct)) +
     geom_point() +
     geom_hline(yintercept = 0.5) +
     geom_vline(xintercept = 0) +
     annotate("text",
              x = max(df$Delta) / 2,
-             y = (max(df$Pct) - 0.5) / 2 + 0.5,
+             y = (max(df$Win_Pct) - 0.5) / 2 + 0.5,
              size = 8,
              label = "Good",
              color = "grey65") +
     annotate("text",
              x = max(df$Delta) / 2,
-             y = (min(df$Pct) - 0.5) / 2 + 0.5,
+             y = (min(df$Win_Pct) - 0.5) / 2 + 0.5,
              size = 8,
              label = "Unlucky",
              color = "grey65") +
     annotate("text",
              x = min(df$Delta) / 2,
-             y = (max(df$Pct) - 0.5) / 2 + 0.5,
+             y = (max(df$Win_Pct) - 0.5) / 2 + 0.5,
              size = 8,
              label = "Lucky",
              color = "grey65") +
     annotate("text",
              x = min(df$Delta) / 2,
-             y = (min(df$Pct) - 0.5) / 2 + 0.5,
+             y = (min(df$Win_Pct) - 0.5) / 2 + 0.5,
              size = 8,
              label = "Bad",
              color = "grey65") +
