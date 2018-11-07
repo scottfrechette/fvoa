@@ -131,6 +131,7 @@ current_matchups <- function(week, schedule, scores, win_prob = NULL) {
 
   current_matchups <- schedule %>%
     filter(Week == week) %>%
+    mutate_if(is.facter, as.character) %>%
     mutate(data = list(scores),
            fvoa_wp = pmap_dbl(list(data, Team1, Team2), matchup)) %>%
     filter(fvoa_wp >= 50) %>%
