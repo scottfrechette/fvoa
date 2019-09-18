@@ -86,6 +86,7 @@ all_matchups <- function(scores, type = "prob",
   teams <- scores %>% distinct(Team)
 
   tmp <- teams %>%
+    rename(Team1 = Team) %>%
     crossing(teams) %>%
     filter(Team != Team1) %>%
     mutate(data = list(scores),

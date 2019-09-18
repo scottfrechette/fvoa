@@ -155,6 +155,7 @@ playoff_leverage_plot <- function(scores, schedule, playoff_leverage_df) {
     ungroup() %>%
     group_by(Team1, Team) %>%
     summarise(Percent = sum(playoff/sims * 100)) %>%
+    ungroup() %>%
     arrange(Team1, -Percent) %>%
     rename(Winner = Team1) %>%
     nest(Team:Percent) %>%
