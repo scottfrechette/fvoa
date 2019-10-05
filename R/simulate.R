@@ -96,7 +96,12 @@ plot_sim_matchup <- function(sim_scores, team1, team2, week,
 
 }
 
-simulate_season <- function(sim_scores, schedule) {
+simulate_seasons <- function(sim_scores, schedule) {
+
+  if("Team" %in% names(schedule)) {
+    schedule <- spread_schedule(schedule) %>%
+      doublewide_schedule()
+  }
 
   final_record <- schedule %>%
     mutate_if(is.factor, as.character) %>%
@@ -137,24 +142,35 @@ simulate_season <- function(sim_scores, schedule) {
 
 }
 
-simulate_weekly_projections <- function(sim_season) {
+simulate_weekly_projections <- function(sim_seasons, all_simulations, week) {
 
-  sim_seasons %>%
-    nest(data = -sim) %>%
-    mutate(playoff = map(data,
-                         ~ .x %>%
-                           slice(1:4) %>%
-                           pull(Team))) %>%
-    unnest(playoff) %>%
-    unnest(data) %>%
-    mutate(playoffs = if_else(Team == playoff, 1, 0)) %>%
-    group_by(Team) %>%
-    summarise(Points = round(mean(Points), 1),
-              Wins = round(mean(Wins), 1),
-              Percent = sum(playoffs)/n_distinct(.$sim) * 100) %>%
-    ungroup() %>%
-    arrange(-Percent, -Wins, -Points) %>%
-    mutate(Rank = 1L:length(teams),
-           Week = max(scores$Week))
+  teams <- unique(sim_season$Team)
+
+  if(week > max(all_simulations$Week)) {
+
+    all_simulations <- bind_rows(
+      all_simulations,
+      sim_season %>%
+        nest(data = -sim) %>%
+        mutate(playoff = map(data,
+                             ~ .x %>%
+                               slice(1:4) %>%
+                               pull(Team))) %>%
+        unnest(playoff) %>%
+        unnest(data) %>%
+        mutate(playoffs = if_else(Team == playoff, 1, 0)) %>%
+        group_by(Team) %>%
+        summarise(Points = round(mean(Points), 1),
+                  Wins = round(mean(Wins), 1),
+                  Percent = sum(playoffs)/n_distinct(.$sim) * 100) %>%
+        ungroup() %>%
+        arrange(-Percent, -Wins, -Points) %>%
+        mutate(Rank = 1L:length(teams),
+               Week = week)
+    )
+
+  }
+
+  all_simulations
 
 }

@@ -132,8 +132,8 @@ odds_to_prob <- function(x) {
   convert_percent(x)
 } # convert odds to win percentage
 
-format_pct <- function (x) {
-  paste0(round(x * 100, 1), "%")
+format_pct <- function (x, accuracy = 1) {
+  paste0(round(x * 100, accuracy), "%")
 } # convert number to percent format
 
 count_to_pct <- function(df, ..., col = n) {
