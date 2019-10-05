@@ -1,6 +1,6 @@
-matchup <- function(scores, team1, team2, reps = 1e6,
-                    type = "prob", breakdown = FALSE,
-                    reg_games = 6, reg_points = 108) {
+compare_teams <- function(scores, team1, team2, reps = 1e6,
+                          type = "prob", breakdown = FALSE,
+                          reg_games = 6, reg_points = 108) {
 
   set.seed(42)
 
@@ -79,9 +79,9 @@ matchup <- function(scores, team1, team2, reps = 1e6,
   }
 }
 
-all_matchups <- function(scores, type = "prob",
-                         reg_games = 6, reps = 1e6,
-                         matrix = FALSE) {
+compare_all_teams <- function(scores, type = "prob",
+                              reg_games = 6, reps = 1e6,
+                              matrix = FALSE) {
 
   teams <- scores %>% distinct(Team)
 
@@ -94,7 +94,7 @@ all_matchups <- function(scores, type = "prob",
   if(type == "prob") {
 
     matchups <- tmp %>%
-      mutate(x = pmap_dbl(list(data, Team, Team1, type = type), matchup)) %>%
+      mutate(x = pmap_dbl(list(data, Team, Team1, type = type), compare_teams)) %>%
       select(-data, -type) %>%
       spread(Team1, x) %>%
       mutate_if(is.numeric, replace_na, 0)
@@ -102,7 +102,7 @@ all_matchups <- function(scores, type = "prob",
   } else {
 
     matchups <- tmp %>%
-      mutate(x = pmap_chr(list(data, Team, Team1, type = type), matchup)) %>%
+      mutate(x = pmap_chr(list(data, Team, Team1, type = type), compare_teams)) %>%
       select(-data, -type) %>%
       spread(Team1, x) %>%
       mutate_if(is.character, replace_na, 0)
@@ -122,7 +122,7 @@ all_matchups <- function(scores, type = "prob",
 
 }
 
-current_matchups <- function(week, schedule, scores, win_prob = NULL) {
+compare_current_matchups <- function(scores, schedule, week, win_prob = NULL) {
 
   if("Team" %in% names(schedule)) {
     schedule <- spread_schedule(schedule) %>%
@@ -133,13 +133,13 @@ current_matchups <- function(week, schedule, scores, win_prob = NULL) {
     filter(Week == week) %>%
     mutate_if(is.factor, as.character) %>%
     mutate(data = list(scores),
-           fvoa_wp = pmap_dbl(list(data, Team1, Team2), matchup)) %>%
+           fvoa_wp = pmap_dbl(list(data, Team1, Team2), compare_teams)) %>%
     filter(fvoa_wp >= 50) %>%
     arrange(-fvoa_wp) %>%
     mutate(Line = map_chr(fvoa_wp, prob_to_odds),
            fvoa_wp = round(fvoa_wp/100, 2) %>% format_pct,
            Spread = pmap_chr(list(data, Team1, Team2, type = "spread"),
-                             matchup)) %>%
+                             compare_teams)) %>%
     select(Winner = Team1,
            Loser = Team2,
            FVOA = fvoa_wp,
@@ -159,9 +159,8 @@ current_matchups <- function(week, schedule, scores, win_prob = NULL) {
   current_matchups
 }
 
-
-playoff_matchups <- function(scores, team1, team2, team3, team4,
-                             reps = 1e6, reg_games = 6, type = "prob") {
+compare_playoff_teams <- function(scores, team1, team2, team3, team4,
+                                  reps = 1e6, reg_games = 6, type = "prob") {
 
   set.seed(42)
 
@@ -172,18 +171,18 @@ playoff_matchups <- function(scores, team1, team2, team3, team4,
   t4 <- enquo(team4)
 
   # Simulate each possible matchup
-  t1r1 <- matchup(scores, !!t1, !!t2)/100
-  t2r1 <- matchup(scores, !!t2, !!t1)/100
-  t3r1 <- matchup(scores, !!t3, !!t4)/100
-  t4r1 <- matchup(scores, !!t4, !!t3)/100
-  t13r2 <- matchup(scores, !!t1, !!t3)/100
-  t14r2 <- matchup(scores, !!t1, !!t4)/100
-  t23r2 <- matchup(scores, !!t2, !!t3)/100
-  t24r2 <- matchup(scores, !!t2, !!t4)/100
-  t31r2 <- matchup(scores, !!t3, !!t1)/100
-  t32r2 <- matchup(scores, !!t3, !!t2)/100
-  t41r2 <- matchup(scores, !!t4, !!t1)/100
-  t42r2 <- matchup(scores, !!t4, !!t2)/100
+  t1r1 <- compare_teams(scores, !!t1, !!t2)/100
+  t2r1 <- compare_teams(scores, !!t2, !!t1)/100
+  t3r1 <- compare_teams(scores, !!t3, !!t4)/100
+  t4r1 <- compare_teams(scores, !!t4, !!t3)/100
+  t13r2 <- compare_teams(scores, !!t1, !!t3)/100
+  t14r2 <- compare_teams(scores, !!t1, !!t4)/100
+  t23r2 <- compare_teams(scores, !!t2, !!t3)/100
+  t24r2 <- compare_teams(scores, !!t2, !!t4)/100
+  t31r2 <- compare_teams(scores, !!t3, !!t1)/100
+  t32r2 <- compare_teams(scores, !!t3, !!t2)/100
+  t41r2 <- compare_teams(scores, !!t4, !!t1)/100
+  t42r2 <- compare_teams(scores, !!t4, !!t2)/100
 
   # Calculate chances of each team winning both rounds
   t1wins <- round(t1r1 * ((t3r1 * t13r2) + (t4r1 * t14r2)), 4) * 100
@@ -209,9 +208,9 @@ playoff_matchups <- function(scores, team1, team2, team3, team4,
 
   # List results
   data_frame(Winner = c(quo_name(t1), quo_name(t2), quo_name(t3), quo_name(t4)),
-                     Percent = c(t1wins, t2wins, t3wins, t4wins) / 100,
-                     Odds = c(t1odds, t2odds, t3odds, t4odds),
-                     BettingLine = as.factor(c(t1Amodds, t2Amodds, t3Amodds, t4Amodds))) %>%
+             Percent = c(t1wins, t2wins, t3wins, t4wins) / 100,
+             Odds = c(t1odds, t2odds, t3odds, t4odds),
+             BettingLine = as.factor(c(t1Amodds, t2Amodds, t3Amodds, t4Amodds))) %>%
     arrange(-Percent) %>%
     mutate(Percent = scales::percent(Percent))
 }

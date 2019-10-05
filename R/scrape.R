@@ -277,7 +277,7 @@ gather_schedule <- function(schedule, Team = Team,
 
   wide_to_long(schedule, Team, Team1, Team2)
 
-  }
+}
 
 doublewide_schedule <- function(schedule) {
 
