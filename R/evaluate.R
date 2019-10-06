@@ -107,7 +107,7 @@ evaluate_lineup <- function(lineup_df, qb = 1, rb = 2,
     filter(!is.na(Team)) %>%
     distinct(Team)
   weeks <- lineup_df %>% distinct(Week)
-  positions <- data_frame(qb, rb, wr, te,
+  positions <- tibble(qb, rb, wr, te,
                           dst, k, dl, db) %>%
     gather(position, roster_spots) %>%
     filter(roster_spots > 0) %>%
@@ -142,9 +142,8 @@ evaluate_lineup <- function(lineup_df, qb = 1, rb = 2,
            sign = if_else(Delta <= 0, "positive", "negative"),
            avg = mean(Delta))
 
-  # best_lineup_final
+  if (plot) {
 
-  if(plot) {
     best_lineup_final %>%
       ggplot(aes(Week, Delta, fill = Delta)) +
       geom_bar(stat = 'identity', color = "black") +
@@ -160,17 +159,15 @@ evaluate_lineup <- function(lineup_df, qb = 1, rb = 2,
       theme(panel.grid.major.y = element_blank()) +
       scale_fill_distiller(palette = "YlOrRd", direction = 1) +
       coord_flip()
-  } else return(best_lineup_final)
+
+  } else {
+
+    return(best_lineup_final)
+
+  }
 }
 
-# Evaluate model for how many games were correctly predicted and plots results
-# Details include matchup breakdowns, team summary, and percentage tiers
-# If print = F it lists breakdown of each week for exploration
-
-evaluation_matchup <- function(actual_scores, model_scores) {
-
-  # actual_scores <- actual_scores %>% unnest()
-  # model_scores <- model_scores %>% unnest
+evaluation_matchup <- function(actual_scores, model_scores, .fun) {
 
   teams <- actual_scores %>% distinct(Team)
 
@@ -181,10 +178,8 @@ evaluation_matchup <- function(actual_scores, model_scores) {
               by = c("Team1" = "Team")) %>%
     left_join(actual_scores %>% rename(Score2 = Score),
               by = c("Team2" = "Team")) %>%
-    # left_join(model_scores,
-    #           by = c("Week")) %>%
     mutate(model_scores = list(model_scores),
-           win_prob = pmap_dbl(list(model_scores, Team1, Team2), matchup),
+           win_prob = pmap_dbl(list(model_scores, Team1, Team2), .fun),
            pred_outcome = if_else(win_prob > 50, 1, 0),
            actual_outcome = if_else(Score1 - Score2 > 0, 1, 0),
            correct = if_else(pred_outcome == actual_outcome, 1, 0),
@@ -230,13 +225,14 @@ evaluation_matchup <- function(actual_scores, model_scores) {
     ungroup() %>%
     arrange(-Correct)
 
-  data_frame(tiers = list(tiers),
+  tibble(tiers = list(tiers),
              brier = list(brier),
              team_accuracy = list(team_accuracy))
 }
 
 evaluate_model <- function(scores,
                            output = c("shiny", "summary", "details"),
+                           .fun = compare_teams,
                            reg_games = 6, reps = 1e6) {
 
   output <- output[[1]]
@@ -262,9 +258,8 @@ evaluate_model <- function(scores,
     filter(Week1 == Week) %>%
     select(-Week1) %>%
     nest(Team:Score, .key = "actual_scores") %>%
-    # mutate(tmp = map(actual_scores, evaluation_matchup, model_scores)) %>%
     left_join(model_scores, by = c("Week" = "join_week")) %>%
-    mutate(tmp = map2(actual_scores, model_scores,
+    mutate(tmp = pmap(list(actual_scores, model_scores, .fun),
                       evaluation_matchup)) %>%
     unnest(tmp) %>%
     select(Week, tiers, brier, team_accuracy)
@@ -284,16 +279,6 @@ evaluate_model <- function(scores,
     pull()
 
   brier_statement <- paste("The model got a final Brier score of", total_brier)
-
-  # brier_breakdown <- brier_sims %>%
-  #   unnest() %>%
-  #   drop_na() %>%
-  #   filter(Week == nrow(brier_sims)) %>%
-  #   group_by(team) %>%
-  #   summarise(total = round(mean(brier), 2)) %>%
-  #   spread(team, total) %>%
-  #   map_dbl(sum) %>%
-  #   sort()
 
   team_accuracy <- evaluation_df %>% unnest(team_accuracy)
 
@@ -335,7 +320,6 @@ evaluate_model <- function(scores,
               correct = sum(correct),
               percent = round(correct/n * 100, 2)) %>%
     ggplot(aes(tier, percent)) +
-    # geom_point() +
     geom_text(aes(label = percent), size = 3,
               alpha = 0.7, vjust = "outward") +
     geom_line() +
@@ -376,8 +360,6 @@ evaluate_model <- function(scores,
     cat("\n")
     print(team_accuracy %>% filter(Week == max(Week)))
     cat("\n")
-    # print(brier_breakdown)
-    # cat("\n")
     print(perc_tiers_all)
     cat("\n")
 

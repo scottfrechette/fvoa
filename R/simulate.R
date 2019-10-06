@@ -57,45 +57,6 @@ simulate_scores <- function(scores, weeks, n_sims,
 
 }
 
-plot_sim_matchup <- function(sim_scores, team1, team2, week,
-                             square = FALSE) {
-
-  sim_scores_subset <- sim_scores %>%
-    filter(Team %in% c(team1, team2),
-           Week == week)
-
-  lo <- min(sim_scores_subset$Score) - 10
-  hi <- max(sim_scores_subset$Score) + 10
-
-  sim_scores_final <- sim_scores_subset %>%
-    spread(Team, Score) %>%
-    select(1:2, team1, team2) %>%
-    mutate(winner = .[[3]] > .[[4]])
-
-  wp <- sim_scores_final %>%
-    summarize(team1 = sum(winner) / n()) %>%
-    mutate(team2 = 1 - team1) %>%
-    mutate_all(~ paste0(round(.x, 2) * 100, "%"))
-
-  p <- sim_scores_final %>%
-    ggplot(aes(.[[3]], .[[4]], color = winner)) +
-    geom_point(alpha = 0.5) +
-    geom_abline(color = "grey30", linetype = 2) +
-    guides(color = FALSE) +
-    labs(x = str_glue(team1, " ({wp[[1]]})"),
-         y = str_glue(team2, " ({wp[[2]]})"))
-
-  if (square) {
-
-    p <- p +
-      coord_cartesian(xlim = c(lo, hi), ylim = c(lo, hi))
-
-  }
-
-  p
-
-}
-
 simulate_seasons <- function(sim_scores, schedule) {
 
   if("Team" %in% names(schedule)) {

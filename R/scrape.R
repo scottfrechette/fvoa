@@ -26,7 +26,7 @@ scrape_schedule <- function(league, league_id) {
 
     }
 
-    data_frame(league_id = league_id,
+    tibble(league_id = league_id,
                Week = 1:17) %>%
       mutate(weekly_schedule = map2(league_id, Week, scrape_week)) %>%
       unnest() %>%
@@ -325,7 +325,7 @@ valid_teamID <- function(id, league_id) {
 
 yahoo_teamIDs <- function(league_id, id = 1:20) {
 
-  data_frame(team_id = id) %>%
+  tibble(team_id = id) %>%
     mutate(league_id = league_id,
            Team = map2_chr(team_id, league_id, valid_teamID)) %>%
     filter(!is.na(Team)) %>%
@@ -358,7 +358,7 @@ espn_teamIDs <- function(league_id, id = 1:20) {
 
   }
 
-  data_frame(team_id = id) %>%
+  tibble(team_id = id) %>%
     mutate(league_id = league_id,
            Team = map2_chr(id, league_id, valid_espnID)) %>%
     filter(!is.na(Team)) %>%

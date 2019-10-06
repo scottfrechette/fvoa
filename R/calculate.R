@@ -74,7 +74,7 @@ calculate_fvoa_season <- function(scores) {
 
   }
 
-  data_frame(fvoa) %>%
+  tibble(fvoa) %>%
     unnest()
 
 }
