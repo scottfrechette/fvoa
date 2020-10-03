@@ -11,7 +11,7 @@ evaluate_lineup <- function(lineup_df,
 
   team_col <- names(select(lineup_df, starts_with("team")))
   lineup_df <- select(lineup_df, league:week,
-                      team = starts_with("team"), score:act)
+                      team = starts_with("team"), score:points)
   teams <- unique(lineup_df$team)
 
   weeks <- unique(lineup_df$week)
@@ -134,8 +134,8 @@ evaluate_model <- function(scores, evaluation_week,
                                      min_score = min_score,
                                      reps = reps)),
            pred_outcome = if_else(win_prob > 50, 1, 0),
-           actual_outcome = if_else(score1 - score2 > 0, 1, 0),
-           correct = if_else(pred_outcome == actual_outcome, 1, 0),
+           act_outcome = if_else(score1 - score2 > 0, 1, 0),
+           correct = if_else(pred_outcome == act_outcome, 1, 0),
            sim = case_when(
              win_prob == 0 & correct == 1 ~ 1000,
              win_prob == 0 & correct == 0 ~ -1000,
@@ -144,7 +144,7 @@ evaluate_model <- function(scores, evaluation_week,
            week = evaluation_week) %>%
     select(week, team1:team2, win_prob:sim) %>%
     set_names("week", team_col, "opp", "win_prob",
-              "pred_outcome", "actual_outcome",
+              "pred_outcome", "act_outcome",
               "correct", "sim")
 
 }
@@ -155,10 +155,10 @@ evaluate_brier <- function(evaluation_df) {
 
   evaluation_df %>%
     select(team = starts_with("team"),
-           win_prob, sim, actual_outcome) %>%
+           win_prob, sim, act_outcome) %>%
     mutate(sim = if_else(abs(sim) == 1000, 0, sim),
            pred = win_prob / 100,
-           brier = (0.25 - (pred - actual_outcome)^2) * 100) %>%
+           brier = (0.25 - (pred - act_outcome)^2) * 100) %>%
     group_by(team) %>%
     summarise(brier = round(mean(brier), 2),
               .groups = "drop") %>%
@@ -212,8 +212,8 @@ max_points_position <- function(lineup_df, .team, .week,
     filter(team == .team,
            week == .week,
            position == .position) %>%
-    top_n(roster_spots, act) %>%
-    mutate(max_points = sum(act)) %>%
+    top_n(roster_spots, points) %>%
+    mutate(max_points = sum(points)) %>%
     select(max_points, player)
 
 }
@@ -238,8 +238,8 @@ max_points_flex <- function(best_lineup, lineup_df, .team, .week,
     best_rb_wr <- lineup_df %>%
       anti_join(chosen_players, by = "player") %>%
       filter(position %in% c("RB", "WR")) %>%
-      top_n(rb_wr, act) %>%
-      mutate(max_points = sum(act),
+      top_n(rb_wr, points) %>%
+      mutate(max_points = sum(points),
              position = "RB_WR") %>%
       nest(player = player) %>%
       select(team, week, position, max_points, player)
@@ -259,8 +259,8 @@ max_points_flex <- function(best_lineup, lineup_df, .team, .week,
     best_flex <- lineup_df %>%
       anti_join(chosen_players, by = "player") %>%
       filter(position %in% c("RB", "WR", "TE")) %>%
-      top_n(flex, act) %>%
-      mutate(max_points = sum(act),
+      top_n(flex, points) %>%
+      mutate(max_points = sum(points),
              position = "Flex") %>%
       nest(player = player) %>%
       select(team, week, position, max_points, player)

@@ -375,7 +375,7 @@ scrape_espn_team <- function(leagueID = 299999, week = 1, season = 2020) {
                     tidy_espn_cols %>%
                     filter(seasonId == season_filter,
                            scoringPeriodId == week_filter) %>%
-                    mutate(type = if_else(statSourceId == 1, "proj", "act")) %>%
+                    mutate(type = if_else(statSourceId == 1, "proj_pts", "act_pts")) %>%
                     select(seasonId, scoringPeriodId, type, points = appliedTotal) %>%
                     spread(type, points)
       )
@@ -387,7 +387,7 @@ scrape_espn_team <- function(leagueID = 299999, week = 1, season = 2020) {
            season = as.integer(season)) %>%
     select(league, leagueID, season, week = scoringPeriodId,
            teamID, score, playerID:position,
-           roster, proj, act, injured, injury_status)
+           roster, proj_pts, act_pts, injured, injury_status)
 }
 
 scrape_yahoo_team <- function(leagueID, week, teamID) {
@@ -420,8 +420,8 @@ scrape_yahoo_team <- function(leagueID, week, teamID) {
 
   bind_rows(starters,
             bench) %>%
-    rename(pts = `Fan Pts`,
-           proj = Proj,
+    rename(act_pts = `Fan Pts`,
+           proj_pts = Proj,
            roster = Pos) %>%
     separate(Player, c("notes", "player"), "Notes\\s+|Note\\s+") %>%
     separate(player, c("player", "result"), "Final|Bye") %>%
@@ -437,7 +437,7 @@ scrape_yahoo_team <- function(leagueID, week, teamID) {
            across(c(season, week, teamID), as.integer)) %>%
     drop_na(player) %>%
     select(league, leagueID, season, week, teamID, score,
-           player, position, roster, proj, act = pts)
+           player, position, roster, proj_pts, act_pts)
 
 }
 
@@ -759,7 +759,7 @@ scrape_espn_team_old <- function(leagueID, week, season = 2020) {
                     ~ team_roster[[.x]][["playerPoolEntry"]][["player"]][["stats"]][[.y]] %>%
                       tidy_espn_cols() %>%
                       filter(season == season, scoringPeriodId > 0) %>%
-                      mutate(type = if_else(statSourceId == 1, "proj", "act")) %>%
+                      mutate(type = if_else(statSourceId == 1, "proj_pts", "act_pts")) %>%
                       select(scoringPeriodId, type, points = appliedTotal) %>%
                       spread(type, points))
       ) %>%
@@ -768,7 +768,7 @@ scrape_espn_team_old <- function(leagueID, week, season = 2020) {
       filter(scoringPeriodId == week) %>%
       select(season, week = scoringPeriodId, teamID, score,
              playerID:position, roster,
-             proj, pts = act, injured, injuryStatus)
+             proj_pts, act_pts, injured, injuryStatus)
 
   } else {
 
@@ -814,7 +814,7 @@ scrape_espn_team_old <- function(leagueID, week, season = 2020) {
                     ~ team_roster[[.x]][["playerPoolEntry"]][["player"]][["stats"]][[.y]] %>%
                       tidy_espn_cols() %>%
                       filter(season == season, scoringPeriodId > 0) %>%
-                      mutate(type = if_else(statSourceId == 1, "proj", "act")) %>%
+                      mutate(type = if_else(statSourceId == 1, "proj_pts", "act_pts")) %>%
                       select(scoringPeriodId, type, points = appliedTotal) %>%
                       spread(type, points))
       ) %>%
@@ -823,7 +823,7 @@ scrape_espn_team_old <- function(leagueID, week, season = 2020) {
       filter(scoringPeriodId == week) %>%
       select(season, week = scoringPeriodId, teamID, score,
              playerID:position, roster,
-             proj, pts = act, injury)
+             proj_pts, act_pts, injury)
 
   }
 
@@ -966,7 +966,7 @@ scrape_weekly_team <- function(season = 2020, league, leagueID, week, team_id = 
                       ~ team_roster[[.x]][["playerPoolEntry"]][["player"]][["stats"]][[.y]] %>%
                         tidy_espn_cols() %>%
                         filter(season == season, scoringPeriodId > 0) %>%
-                        mutate(type = if_else(statSourceId == 1, "proj", "act")) %>%
+                        mutate(type = if_else(statSourceId == 1, "proj_pts", "act_pts")) %>%
                         select(scoringPeriodId, type, points = appliedTotal) %>%
                         spread(type, points))
         ) %>%
@@ -1021,7 +1021,7 @@ scrape_weekly_team <- function(season = 2020, league, leagueID, week, team_id = 
                       ~ team_roster[[.x]][["playerPoolEntry"]][["player"]][["stats"]][[.y]] %>%
                         tidy_espn_cols() %>%
                         filter(season == season, scoringPeriodId > 0) %>%
-                        mutate(type = if_else(statSourceId == 1, "proj", "act")) %>%
+                        mutate(type = if_else(statSourceId == 1, "proj_pts", "act_pts")) %>%
                         select(scoringPeriodId, type, points = appliedTotal) %>%
                         spread(type, points))
         ) %>%
@@ -1030,7 +1030,7 @@ scrape_weekly_team <- function(season = 2020, league, leagueID, week, team_id = 
         filter(scoringPeriodId == week) %>%
         select(season, week = scoringPeriodId, teamID, score,
                playerID:position, roster,
-               proj, act, injury)
+               proj_pts, act_pts, injury)
 
     }
   }
