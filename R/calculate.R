@@ -1,11 +1,14 @@
-calculate_rankings <- function(schedule, scores) {
-  calculate_stats(schedule, scores) %>%
+calculate_rankings <- function(schedule, scores, league) {
+
+  team_col <- names(select(scores, starts_with("team")))
+
+  calculate_stats(schedule, scores, league = league) %>%
     left_join(calculate_fvoa(scores),
-              by = "team") %>%
+              by = team_col) %>%
     left_join(calculate_strength_schedule(schedule, scores),
-              by = "team") %>%
+              by = team_col) %>%
     left_join(calculate_colley(schedule, scores),
-              by = "team")
+              by = team_col)
 }
 
 calculate_fvoa_season <- function(scores) {
@@ -32,13 +35,14 @@ calculate_quadrants <- function(schedule, scores) {
 
   num_games <- length(min(schedule$week):max(schedule$week))
 
-  if("team" %in% names(schedule)) {
-    schedule <- spread_schedule(schedule) %>%
-      doublewide_schedule()
+  if("team" %in% names(schedule) | "teamID" %in% names(schedule)) {
+    schedule <- spread_schedule(schedule)
   }
 
-  scores <- scores %>%
-    mutate_if(is.character, as.factor)
+  schedule <- doublewide_schedule(schedule)
+
+  team_col <- names(select(scores, starts_with("team")))
+  scores <- select(scores, week, team = starts_with("team"), score)
 
   schedule %>%
     left_join(scores %>% rename(score1 = score),
@@ -53,12 +57,14 @@ calculate_quadrants <- function(schedule, scores) {
     summarise(points = sum(score),
               delta = sum(diff),
               win_pct = sum(diff > 0) / num_games) %>%
-    mutate(avg_points = mean(points))
+    mutate(avg_points = mean(points)) %>%
+    set_names(team_col, "points", "delta",
+              "win_pct", "avg_points")
 
 }
 
+# Helper Functions --------------------------------------------------------
 
-# Helpers -----------------------------------------------------------------
 
 calculate_stats <- function(schedule, scores, league = "Yahoo") {
 
@@ -70,6 +76,11 @@ calculate_stats <- function(schedule, scores, league = "Yahoo") {
   if("team" %in% names(schedule)) {
     schedule <- spread_schedule(schedule)
   }
+
+  team_col <- names(select(scores, starts_with("team")))
+  scores <- select(scores, week, team = starts_with("team"), score)
+
+  rank_col <- paste(league, "rank", sep = "_")
 
   schedule %>%
     left_join(scores %>%
@@ -94,29 +105,40 @@ calculate_stats <- function(schedule, scores, league = "Yahoo") {
               tie = sum(tie)) %>%
     mutate(percent = round(wins/(wins + losses + tie), 3)) %>%
     arrange(-wins, -points) %>%
-    mutate(`Yahoo rank` = row_number(),
+    mutate(rank = row_number(),
            percent = format_pct(percent)) %>%
     arrange(-wins, -points) %>%
-    unite(record, c(wins, losses, tie), sep = "-")
+    unite(record, c(wins, losses, tie), sep = "-") %>%
+    set_names(team_col, "points", "record",
+              "percent", rank_col)
 }
 
 calculate_fvoa <- function(scores) {
+
+  team_col <- names(select(scores, starts_with("team")))
+  scores <- select(scores, week, team = starts_with("team"), score)
 
   compare_league(scores, output = "prob") %>%
     select(-team) %>%
     map_df(function(x) {round((mean(100 - x, na.rm = T) - 50) / 0.5, 2)}) %>%
     gather(team, fvoa) %>%
     arrange(-fvoa) %>%
+    mutate(team = type.convert(team, as.is = TRUE)) %>%
+    set_names(team_col, "fvoa") %>%
     mutate(fvoa_rank = dense_rank(-fvoa))
 
 }
 
 calculate_strength_schedule <- function(schedule, scores) {
 
-  if("team" %in% names(schedule)) {
-    schedule <- spread_schedule(schedule) %>%
-      doublewide_schedule()
+  if("team" %in% names(schedule) | "teamID" %in% schedule) {
+    schedule <- spread_schedule(schedule)
   }
+
+  schedule <- doublewide_schedule(schedule)
+
+  team_col <- names(select(scores, starts_with("team")))
+  scores <- select(scores, week, team = starts_with("team"), score)
 
   calculate_fvoa(scores) %>%
     select(team2 = team, fvoa) %>%
@@ -125,16 +147,21 @@ calculate_strength_schedule <- function(schedule, scores) {
     group_by(team) %>%
     summarise(sos = round(mean(fvoa), 2)) %>%
     arrange(sos) %>%
-    mutate("sos rank" = min_rank(-sos))
+    set_names(team_col, "sos") %>%
+    mutate(sos_rank = min_rank(-sos))
 
 }
 
 calculate_colley <- function(schedule, scores) {
 
-  if("team" %in% names(schedule)) {
-    schedule <- spread_schedule(schedule) %>%
-      doublewide_schedule()
+  if("team" %in% names(schedule) | "teamID" %in% schedule) {
+    schedule <- spread_schedule(schedule)
   }
+
+  schedule <- doublewide_schedule(schedule)
+
+  team_col <- names(select(scores, starts_with("team")))
+  scores <- select(scores, week, team = starts_with("team"), score)
 
   colley_df <- schedule %>%
     left_join(scores, by = c("week", "team1" = "team")) %>%
@@ -142,8 +169,8 @@ calculate_colley <- function(schedule, scores) {
     mutate(x = if_else(score.x > score.y, "W",
                        if_else(score.y > score.x, "L", "")) )%>%
     group_by(team1, team2) %>%
-    summarise(x = paste(x, collapse = "")) %>%
-    ungroup() %>%
+    summarise(x = paste(x, collapse = ""),
+              .groups = "drop") %>%
     spread(team2, x) %>%
     mutate_if(is.character, replace_na, "X") %>%
     unite(outcomes, -team1, sep = "_") %>%
@@ -165,7 +192,7 @@ calculate_colley <- function(schedule, scores) {
 
   colley_invmat <- colley_df %>%
     select(team1, outcomes) %>%
-    separate(outcomes, colley_df$team1) %>%
+    separate(outcomes, as.character(colley_df$team1)) %>%
     gather(team, value, -team1) %>%
     mutate(x = map_dbl(value, colley_transform)) %>%
     select(-value) %>%
@@ -179,5 +206,6 @@ calculate_colley <- function(schedule, scores) {
              round(4),
            rank = min_rank(-rating)) %>%
     select(team = team1, colley_rating = rating, colley_rank = rank) %>%
-    arrange(colley_rank)
+    arrange(colley_rank) %>%
+    set_names(team_col, "colley_rating", "colley_rank")
 }

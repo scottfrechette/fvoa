@@ -253,17 +253,33 @@ scrape_yahoo_schedule <- function(leagueID, week) {
 scrape_espn_team <- function(leagueID = 299999, week = 1, season = 2020) {
 
   season_filter <- season
+  week_filter <- week
 
   if(season == as.numeric(format(Sys.Date(),'%Y'))) {
 
     url <- str_glue("https://fantasy.espn.com/apis/v3/games/ffl/seasons/{season}/segments/0/leagues/{leagueID}?view=mMatchup&view=mMatchupScore&scoringPeriodId={week}")
 
-    teams <- fromJSON(url) %>%
+    json_data <- fromJSON(url)
+
+    teams <- json_data %>%
       .$teams %>%
-      map_if(is.data.frame, list) %>%
-      as_tibble()
+      tidy_espn_cols()
 
     team_roster <- teams$roster[[1]]$entries
+
+    schedule <- json_data %>%
+      .$schedule
+
+    scores <- bind_rows(
+      bind_cols(week = schedule$matchupPeriodId,
+                schedule$home %>%
+                  select(teamID = teamId, score = totalPoints)),
+      bind_cols(week = schedule$matchupPeriodId,
+                schedule$away %>%
+                  select(teamID = teamId, score = totalPoints))
+    ) %>%
+      as_tibble() %>%
+      filter(week == week_filter)
 
   } else {
 
@@ -273,10 +289,24 @@ scrape_espn_team <- function(leagueID = 299999, week = 1, season = 2020) {
     teams <- fromJSON(url) %>%
       .$teams %>%
       .[[1]] %>%
-      map_if(is.data.frame, list) %>%
-      as_tibble()
+      tidy_espn_cols()
 
     team_roster <- teams$roster[[1]]$entries
+
+    schedule <- json_data %>%
+      .$schedule %>%
+      .[[1]]
+
+    scores <- bind_rows(
+      bind_cols(week = schedule$matchupPeriodId,
+                schedule$home %>%
+                  select(teamID = teamId, score = totalPoints)),
+      bind_cols(week = schedule$matchupPeriodId,
+                schedule$away %>%
+                  select(teamID = teamId, score = totalPoints))
+    ) %>%
+      as_tibble() %>%
+      filter(week == week_filter)
 
   }
 
@@ -284,9 +314,9 @@ scrape_espn_team <- function(leagueID = 299999, week = 1, season = 2020) {
 
     tmp <- teams %>%
       select(teamID = id) %>%
+      left_join(scores, by = "teamID") %>%
       mutate(
         season = as.integer(season),
-        score = teams$roster[[1]]$appliedStatTotal,
         team_n = row_number(),
         player_data = map(team_n,
                           ~ team_roster[[.x]][["playerPoolEntry"]][["player"]] %>%
@@ -303,9 +333,9 @@ scrape_espn_team <- function(leagueID = 299999, week = 1, season = 2020) {
       unite(team, location, nickname, sep = " ") %>%
       mutate(team = str_trim(team)) %>%
       select(teamID = id, team) %>%
+      left_join(scores, by = "teamID") %>%
       mutate(
         season = season,
-        score = teams$roster[[1]]$appliedStatTotal,
         team_n = row_number(),
         player_data = map(team_n,
                           ~ team_roster[[.x]][["playerPoolEntry"]][["player"]] %>%
@@ -342,10 +372,9 @@ scrape_espn_team <- function(leagueID = 299999, week = 1, season = 2020) {
       ),
       data = map2(team_n, row_number(),
                   ~ team_roster[[.x]][["playerPoolEntry"]][["player"]][["stats"]][[.y]] %>%
-                    map_if(is.data.frame, list) %>%
-                    as_tibble() %>%
+                    tidy_espn_cols %>%
                     filter(seasonId == season_filter,
-                           scoringPeriodId == week) %>%
+                           scoringPeriodId == week_filter) %>%
                     mutate(type = if_else(statSourceId == 1, "proj", "act")) %>%
                     select(seasonId, scoringPeriodId, type, points = appliedTotal) %>%
                     spread(type, points)
@@ -629,22 +658,30 @@ gather_schedule <- function(schedule, team = team,
 
 doublewide_schedule <- function(schedule) {
 
-  if("team" %in% names(schedule)) {
+  if("teamID" %in% names(schedule)) {
 
     schedule <- spread_schedule(schedule)
 
   }
 
+  other_cols <- setdiff(names(schedule), c("team1", "team2"))
+
   schedule_tmp <- schedule %>%
     mutate_if(is.factor, as.character)
   schedule_rev <- schedule_tmp %>%
-    select(week, gameID, team1 = team2, team2 = team1)
+    select(other_cols, team1 = team2, team2 = team1)
   bind_rows(schedule_tmp, schedule_rev) %>%
     arrange(week, team1)
 
 }
 
-# extract scores
+extract_scores <- function(scores) {
+
+  scores %>%
+    select(week, starts_with("team"), score) %>%
+    distinct()
+
+}
 
 # Old Functions -----------------------------------------------------------
 

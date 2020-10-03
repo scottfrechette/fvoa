@@ -1,6 +1,10 @@
-compare_teams <- function(scores, team1, team2, reps = 1e6,
+compare_teams <- function(scores,
+                          team1,
+                          team2,
+                          reps = 1e6,
                           output = c("prob", "odds", "spread"),
                           verbose = FALSE,
+                          min_score = 50,
                           reg_games = 6,
                           reg_points = 108) {
 
@@ -8,37 +12,20 @@ compare_teams <- function(scores, team1, team2, reps = 1e6,
 
   output <- match.arg(output)
 
-  # Identify teams and weeks
-  t1 <- quo_name(enquo(team1))
-  t2 <- quo_name(enquo(team2))
-  weeks_played <- max(scores$week)
+  t1_sim <- simulate_score(scores,
+                           team1,
+                           reps = reps,
+                           min_score = min_score,
+                           reg_games = reg_games,
+                           reg_points = reg_points)
 
-  # Extract team scores
-  t1_scores <- scores[scores$team == t1, "score"]$score
-  t2_scores <- scores[scores$team == t2, "score"]$score
+  t2_sim <- simulate_score(scores,
+                           team2,
+                           reps = reps,
+                           min_score = min_score,
+                           reg_games = reg_games,
+                           reg_points = reg_points)
 
-  # Calculate team weighted mean/SD
-  if (weeks_played < reg_games) {
-
-    t1_mean <- weighted.mean(c(t1_scores, reg_points), weight_games(t1_scores, reg_games))
-    t1_sd <- weighted_sd(c(t1_scores, reg_points), weight_games(t1_scores, reg_games), method="ML")
-    t2_mean <- weighted.mean(c(t2_scores, reg_points), weight_games(t2_scores, reg_games))
-    t2_sd <- weighted_sd(c(t2_scores, reg_points), weight_games(t2_scores, reg_games), method="ML")
-
-  } else {
-
-    t1_mean <- weighted.mean(t1_scores, weight_games(t1_scores, reg_games))
-    t1_sd <- weighted_sd(t1_scores, weight_games(t1_scores, reg_games), method="ML")
-    t2_mean <- weighted.mean(t2_scores, weight_games(t2_scores, reg_games))
-    t2_sd <- weighted_sd(t2_scores, weight_games(t2_scores, reg_games), method="ML")
-
-  }
-
-  # Simulate repeated scores from team's mean/SD
-  t1_sim <- rnorm(reps, t1_mean, t1_sd)
-  t2_sim <- rnorm(reps, t2_mean, t2_sd)
-
-  # Calculate probability of each team winning or tie for the 1e6 scores
   sim <- t1_sim - t2_sim
 
   if(output == "prob") {
@@ -66,7 +53,7 @@ compare_teams <- function(scores, team1, team2, reps = 1e6,
 
   } else {NA}
 
-  if(verbose == TRUE) {
+  if(verbose) {
 
     t1squeak <- t1wins - round(pnorm(5, mean(sim), sd(sim), lower.tail=FALSE)*100, 2)
     t1blowout <- round(pnorm(20, mean(sim), sd(sim), lower.tail=FALSE)*100, 2)
@@ -75,7 +62,7 @@ compare_teams <- function(scores, team1, team2, reps = 1e6,
     t2blowout <- round(pnorm(-20, mean(sim), sd(sim))*100, 2)
     t2normal <- t2wins - t2squeak - t2blowout
 
-    tibble(Winner = c(t1, t1, t1, "Tie", t2, t2, t2),
+    tibble(Winner = c(team1, team1, team1, "Tie", team2, team2, team2),
            output = c("Blowout", "Normal", "Squeaker", "Tie", "Squeaker", "Normal", "Blowout"),
            MarginVictory = c("20+ points", "5-20", "<5 points", "-", "<5 points", "5-20", "20+ points"),
            PctChance = c(t1blowout, t1normal, t1squeak, tie, t2squeak, t2normal, t2blowout))
@@ -90,11 +77,16 @@ compare_teams <- function(scores, team1, team2, reps = 1e6,
 compare_league <- function(scores,
                            output = c("prob", "odds", "spread"),
                            .fun = compare_teams,
-                           reg_games = 6, reps = 1e6,
+                           reg_games = 6,
+                           reps = 1e6,
                            matrix = FALSE) {
+
+  set.seed(42)
 
   output <- match.arg(output)
 
+  team_col <- names(select(scores, starts_with("team")))
+  scores <- select(scores, week, team = starts_with("team"), score)
   teams <- unique(scores$team)
 
   tmp <- crossing(team1 = teams, team2 = teams) %>%
@@ -140,10 +132,15 @@ compare_current_matchups <- function(scores, schedule,
                                      .fun = compare_teams,
                                      win_prob = NULL) {
 
-  if("team" %in% names(schedule)) {
-    schedule <- spread_schedule(schedule) %>%
-      doublewide_schedule()
+  set.seed(42)
+
+  scores <- select(scores, week, team = starts_with("team"), score)
+
+  if("team" %in% names(schedule) | "teamID" %in% names(schedule)) {
+    schedule <- spread_schedule(schedule)
   }
+
+  schedule <- doublewide_schedule(schedule)
 
   cutoff <- length(unique(scores$team)) / 2
 
