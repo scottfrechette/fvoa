@@ -426,61 +426,24 @@ list_to_dt <- function(x) {
   as.POSIXct(x, origin = "1970-01-01", tz = "America/New_York")
 }
 
-team_ids <- tibble::tribble(
-  ~id,~name,
-  22L, "ARI",
-  1L, "ATL",
-  33L, "BAL",
-  2L, "BUF",
-  29L, "CAR",
-  3L, "CHI",
-  4L, "CIN",
-  5L, "CLE",
-  6L, "DAL",
-  7L, "DEN",
-  8L, "DET",
-  9L, "GB",
-  34L, "HOU",
-  11L, "IND",
-  30L, "JAX",
-  12L, "KC",
-  24L, "LAC",
-  14L, "LA",
-  15L, "MIA",
-  16L, "MIN",
-  17L, "NE",
-  18L, "NO",
-  19L, "NYG",
-  20L, "NYJ",
-  13L, "OAK",
-  21L, "PHI",
-  23L, "PIT",
-  26L, "SEA",
-  25L, "SF",
-  27L, "TB",
-  10L, "TEN",
-  28L, "WAS",
-  0, "FA"
-)
-
 team_id_to_name <- function(id) {
   rows <- purrr::map_int(id, function(x) {
-    matches <- x == team_ids$id
+    matches <- x == nfl_teamIDs$id
     if (any(matches)) which(matches)[1]
     else NA_integer_
   })
 
-  team_ids$name[rows]
+  nfl_teamIDs$name[rows]
 }
 
 team_name_to_id <- function(name) {
   rows <- purrr::map_int(name, function(x) {
-    matches <- x == team_ids$name
+    matches <- x == nfl_teamIDs$name
     if (any(matches)) which(matches)[1]
     else NA_integer_
   })
 
-  team_ids$id[rows]
+  nfl_teamIDs$id[rows]
 }
 
 stat_id_to_name <- function(id) {
