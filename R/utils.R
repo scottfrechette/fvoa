@@ -191,7 +191,6 @@ select_rankings <- function(df, ...) {
 }
 
 slot_name_to_id <- function(x) {
-  # QB: 0, RB: 2, WR: 4, TE: 6, DST: 16, K: 17
   dplyr::case_when(
     x == "QB" ~ 0L,
     x == "TQB" ~ 1L, # team quarterback
@@ -278,7 +277,7 @@ tidy_projections <- function(x) {
   player <-  purrr::simplify_all(purrr::transpose(x$player))
   player$id <- as.character(player$id)
 
-  player$team <- team_id_to_name(player$proTeamId)
+  player$team <- nfl_teamid_to_name(player$proTeamId)
   player$proTeamId <- NULL
 
   if ("lastNewsDate" %in% names(player)) {
@@ -314,7 +313,6 @@ tidy_projections <- function(x) {
 
   player$teamID <- x$onTeamId
 
-  # parse player ownership
   ownership <- lapply(player$ownership, tidyr::replace_na, NA_real_)
   ownership <- purrr::map(ownership, function(x) {
     if (is.list(x)) {
@@ -331,20 +329,16 @@ tidy_projections <- function(x) {
 
   player <- unnest(player, ownership, keep_empty = TRUE)
 
-  # player rankings
   if ("rankings" %in% names(player)) {
     player$rankings <- purrr::map(player$rankings, tidy_projection_rankings)
   }
 
-  # ranks by rank type
   player$draftRanksByRankType <- purrr::map(player$draftRanksByRankType, tidy_projection_draft_ranks)
 
-  # prepare data frame
   x <- player
   x <- dplyr::select(x, "id", "fullName", "team", "defaultPosition", dplyr::everything())
   x$ratings <- ratings
 
-  # clean column names
   colnames(x) <- camel_to_snake(colnames(x))
   x <- dplyr::select(
     x,
@@ -366,10 +360,6 @@ tidy_projections <- function(x) {
     "stats"
   )
 
-  # unnest the stats (projections)
-  # x <- tidyr::unnest(x, "stats", keep_empty = T)
-
-  # return data frame
   x
 }
 
@@ -386,23 +376,17 @@ tidy_projection_ratings <- function(ratings) {
 tidy_projection_stats <- function(stats) {
   if (length(stats) == 0) return(tibble::tibble())
 
-  # parse applied total (fpts)
   if (!is.list(stats)) print(stats)
   fpts_proj <- stats[[1]]$appliedTotal
 
-  # parse individual stats
   stats <- stats[[1]]$stats
   names(stats) <- stat_id_to_name(names(stats))
 
-  # put into dataframe
   df <- as_tibble_snake(stats)
   df$fpts_proj <- fpts_proj
 
-  # order columns to put unknown stats at the end?
   df <- dplyr::select(df, -dplyr::starts_with("stat_"), dplyr::starts_with("stat_"))
-  #df <- dplyr::select(df, -dplyr::starts_with("stat_"))
 
-  # return data frame
   return(df)
 }
 
@@ -426,7 +410,7 @@ list_to_dt <- function(x) {
   as.POSIXct(x, origin = "1970-01-01", tz = "America/New_York")
 }
 
-team_id_to_name <- function(id) {
+nfl_teamid_to_name <- function(id) {
   rows <- purrr::map_int(id, function(x) {
     matches <- x == nfl_teamIDs$id
     if (any(matches)) which(matches)[1]
@@ -436,7 +420,7 @@ team_id_to_name <- function(id) {
   nfl_teamIDs$name[rows]
 }
 
-team_name_to_id <- function(name) {
+nfl_team_name_to_id <- function(name) {
   rows <- purrr::map_int(name, function(x) {
     matches <- x == nfl_teamIDs$name
     if (any(matches)) which(matches)[1]
