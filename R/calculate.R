@@ -1,3 +1,4 @@
+#' @export
 calculate_rankings <- function(schedule, scores, league) {
 
   team_col <- names(select(scores, starts_with("team")))
@@ -11,6 +12,7 @@ calculate_rankings <- function(schedule, scores, league) {
               by = team_col)
 }
 
+#' @export
 calculate_fvoa_season <- function(scores) {
 
   fvoa <- list()
@@ -31,9 +33,10 @@ calculate_fvoa_season <- function(scores) {
 
 }
 
+#' @export
 calculate_quadrants <- function(schedule, scores) {
 
-  num_games <- length(min(schedule$week):max(schedule$week))
+  num_games <- max(scores$week)
 
   if("team" %in% names(schedule) | "teamID" %in% names(schedule)) {
     schedule <- spread_schedule(schedule)
@@ -52,14 +55,15 @@ calculate_quadrants <- function(schedule, scores) {
     drop_na() %>%
     mutate(diff = score1 - score2) %>%
     select(week, team = team1,
-           score = score1, diff) %>%
+           score1, score2,
+           diff) %>%
     group_by(team) %>%
-    summarise(points = sum(score),
+    summarise(pf = sum(score1),
+              pa = sum(score2),
               delta = sum(diff),
-              win_pct = sum(diff > 0) / num_games) %>%
-    mutate(avg_points = mean(points)) %>%
-    set_names(team_col, "points", "delta",
-              "win_pct", "avg_points")
+              wp = sum(diff > 0) / num_games,
+              .groups = "drop") %>%
+    set_names(team_col, "pf", "pa", "delta", "wp")
 
 }
 
@@ -118,7 +122,7 @@ calculate_fvoa <- function(scores) {
   team_col <- names(select(scores, starts_with("team")))
   scores <- select(scores, week, team = starts_with("team"), score)
 
-  compare_league(scores, output = "prob") %>%
+  compare_league(scores, .output = "prob") %>%
     select(-team) %>%
     map_df(function(x) {round((mean(100 - x, na.rm = T) - 50) / 0.5, 2)}) %>%
     gather(team, fvoa) %>%

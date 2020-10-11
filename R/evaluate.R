@@ -1,4 +1,5 @@
 
+#' @export
 evaluate_lineup <- function(lineup_df,
                             qb = 1, rb = 2,
                             wr = 3, te = 1,
@@ -11,7 +12,7 @@ evaluate_lineup <- function(lineup_df,
 
   team_col <- names(select(lineup_df, starts_with("team")))
   lineup_df <- select(lineup_df, league:week,
-                      team = starts_with("team"), score:points)
+                      team = starts_with("team"), score:act_pts)
   teams <- unique(lineup_df$team)
 
   weeks <- unique(lineup_df$week)
@@ -100,55 +101,82 @@ evaluate_lineup <- function(lineup_df,
   }
 }
 
-evaluate_model <- function(scores, evaluation_week,
-                           .fun = compare_teams,
-                           reg_games = 6, reg_points = 108,
-                           min_score = 50, reps = 1e6) {
+#' @export
+evaluate_model <- function(scores,
+                           evaluation_week,
+                           .fun = simulate_score,
+                           .reg_games = 6,
+                           .reg_points = 108,
+                           .min_score = 50,
+                           .reps = 1e6) {
 
   team_col <- names(select(scores, starts_with("team")))
-  scores <- select(scores, week, team = starts_with("team"), score)
-  teams <- unique(scores$team)
+  scores_tmp <- scores %>%
+    extract_scores() %>%
+    select(week, team = starts_with("team"), score)
+  teams <- unique(scores_tmp$team)
 
-  previous_scores <- scores %>%
+  previous_scores <- scores_tmp %>%
     filter(week < evaluation_week) %>%
     mutate(evaluation_week = evaluation_week)
 
-  actual_scores <- scores %>%
-    filter(evaluation_week == week) %>%
-    select(team, score)
+  actual_scores <- scores_tmp %>%
+    filter(week == evaluation_week) %>%
+    select(team1 = team, score1 = score)
 
   set.seed(42)
 
-  crossing(team1 = teams,
-           team2 = teams) %>%
+  pred_scores <- actual_scores %>%
+    mutate(sim1 = map(team1, ~ .fun(previous_scores, .x, .reps = .reps, ...)))
+
+  out <- crossing(pred_scores,
+           rename(pred_scores,
+                  team2 = team1, score2 = score1, sim2 = sim1)) %>%
     filter(team1 != team2) %>%
-    left_join(rename(actual_scores, score1 = score),
-              by = c("team1" = "team")) %>%
-    left_join(rename(actual_scores, score2 = score),
-              by = c("team2" = "team")) %>%
-    mutate(previous_scores = list(previous_scores),
-           win_prob = pmap_dbl(list(previous_scores, team1, team2),
-                               ~.fun(..1, ..2, ..3,
-                                     reg_games = reg_games,
-                                     reg_points = reg_points,
-                                     min_score = min_score,
-                                     reps = reps)),
+    mutate(margin = score1 - score2,
+           sim = map2(sim1, sim2, ~ .x - .y),
+           win_prob = map_dbl(sim, convert_wp),
+           lower80 = map_dbl(sim, ~ quantile(.x, 0.1)),
+           upper80 = map_dbl(sim, ~ quantile(.x, 0.9)),
+           lower95 = map_dbl(sim, ~ quantile(.x, 0.025)),
+           upper95 = map_dbl(sim, ~ quantile(.x, 0.975)),
            pred_outcome = if_else(win_prob > 50, 1, 0),
            act_outcome = if_else(score1 - score2 > 0, 1, 0),
            correct = if_else(pred_outcome == act_outcome, 1, 0),
+           range80 = if_else(between(margin, lower80, upper80), 1, 0),
+           range95 = if_else(between(margin, lower95, upper95), 1, 0),
            sim = case_when(
              win_prob == 0 & correct == 1 ~ 1000,
              win_prob == 0 & correct == 0 ~ -1000,
              correct == 1 ~ win_prob,
              TRUE ~ -win_prob),
            week = evaluation_week) %>%
-    select(week, team1:team2, win_prob:sim) %>%
-    set_names("week", team_col, "opp", "win_prob",
-              "pred_outcome", "act_outcome",
+    select(week, team1, team2, margin,
+           lower80, upper80, lower95, upper95,
+           range80, range95,
+           win_prob, pred_outcome, act_outcome,
+           correct, sim) %>%
+    set_names("week", team_col, "opp", "margin",
+              "lower80", "upper80", "lower95", "upper95",
+              "range80", "range95",
+              "win_prob", "pred_outcome", "act_outcome",
               "correct", "sim")
+
+  if("league" %in% names(scores)) {
+
+    out <- out %>%
+      mutate(league = scores$league[1],
+             leagueID = scores$leagueID[1],
+             season = scores$season[1],
+             .before = 1)
+
+  }
+
+  return(out)
 
 }
 
+#' @export
 evaluate_brier <- function(evaluation_df) {
 
   team_col <- names(select(evaluation_df, starts_with("team")))
@@ -167,6 +195,7 @@ evaluate_brier <- function(evaluation_df) {
 
 }
 
+#' @export
 evaluate_team_accuracy <- function(evaluation_df) {
 
   team_col <- names(select(evaluation_df, starts_with("team")))
@@ -181,6 +210,7 @@ evaluate_team_accuracy <- function(evaluation_df) {
 
 }
 
+#' @export
 evaluate_tiers <- function(evaluation_df) {
 
   evaluation_df %>%
@@ -212,8 +242,8 @@ max_points_position <- function(lineup_df, .team, .week,
     filter(team == .team,
            week == .week,
            position == .position) %>%
-    top_n(roster_spots, points) %>%
-    mutate(max_points = sum(points)) %>%
+    top_n(roster_spots, act_pts) %>%
+    mutate(max_points = sum(act_pts)) %>%
     select(max_points, player)
 
 }
@@ -238,8 +268,8 @@ max_points_flex <- function(best_lineup, lineup_df, .team, .week,
     best_rb_wr <- lineup_df %>%
       anti_join(chosen_players, by = "player") %>%
       filter(position %in% c("RB", "WR")) %>%
-      top_n(rb_wr, points) %>%
-      mutate(max_points = sum(points),
+      top_n(rb_wr, act_pts) %>%
+      mutate(max_points = sum(act_pts),
              position = "RB_WR") %>%
       nest(player = player) %>%
       select(team, week, position, max_points, player)
@@ -259,8 +289,8 @@ max_points_flex <- function(best_lineup, lineup_df, .team, .week,
     best_flex <- lineup_df %>%
       anti_join(chosen_players, by = "player") %>%
       filter(position %in% c("RB", "WR", "TE")) %>%
-      top_n(flex, points) %>%
-      mutate(max_points = sum(points),
+      top_n(flex, act_pts) %>%
+      mutate(max_points = sum(act_pts),
              position = "Flex") %>%
       nest(player = player) %>%
       select(team, week, position, max_points, player)

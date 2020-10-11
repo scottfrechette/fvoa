@@ -1,3 +1,4 @@
+#' @export
 theme_fvoa <- function(base_size = 12, base_family = "Helvetica") {
   theme(plot.title = element_text(hjust = 0.5),
         panel.background = element_blank(),
@@ -10,6 +11,7 @@ theme_fvoa <- function(base_size = 12, base_family = "Helvetica") {
 
 # Plot functions
 
+#' @export
 plot_scores <- function(scores, x = week, y = score, group = team) {
 
   x_quo <- enquo(x)
@@ -29,6 +31,7 @@ plot_scores <- function(scores, x = week, y = score, group = team) {
     theme_fvoa()
 }
 
+#' @export
 boxplots <- function(scores, score = score, team = team) {
   ggplot(scores, aes(x=reorder(team, -score, fun=mean), y=score, fill=team)) +
     geom_boxplot(coef = 1.25, outlier.alpha = 0.6) +
@@ -39,6 +42,7 @@ boxplots <- function(scores, score = score, team = team) {
     theme(panel.border = element_blank())
 }
 
+#' @export
 joy_plots <- function(scores, score = score, team = team) {
 
   requireNamespace("ggridges", quietly = TRUE)
@@ -51,6 +55,7 @@ joy_plots <- function(scores, score = score, team = team) {
     theme_fvoa()
 }
 
+#' @export
 plot_matchups <- function(all_matchups_df) {
 
   matchup_df <- all_matchups_df %>%
@@ -70,6 +75,7 @@ plot_matchups <- function(all_matchups_df) {
     guides(colour = guide_legend(nrow = 1))
 }
 
+#' @export
 plot_fvoa <- function(fvoa_df, x = week, y = fvoa, group = team) {
 
   x_quo <- enquo(x)
@@ -91,6 +97,7 @@ plot_fvoa <- function(fvoa_df, x = week, y = fvoa, group = team) {
     theme_fvoa()
 }
 
+#' @export
 plot_matchups_hm <- function(all_matchups_df) {
 
   hm_df <- all_matchups_df %>%
@@ -111,6 +118,7 @@ plot_matchups_hm <- function(all_matchups_df) {
 
 }
 
+#' @export
 plot_team_evaluation <- function(df) {
 
   if(!"Proj" %in% names(df)) {
@@ -131,6 +139,8 @@ plot_team_evaluation <- function(df) {
     theme_fvoa() +
     theme(panel.grid.major.y = element_blank())
 }
+
+#' @export
 plot_playoff_leverage <- function(scores, schedule, playoff_leverage_df) {
 
   sims <- max(playoff_leverage_df$sim)
@@ -197,6 +207,7 @@ plot_playoff_leverage <- function(scores, schedule, playoff_leverage_df) {
           strip.text = element_text(size =12))
 }
 
+#' @export
 plot_simulation <- function(simulated_season_df, plot = c(Wins, points, Percent)) {
   plots <- tibble(Wins = "Projected Wins by week",
                       points = "Projected Total Points by week",
@@ -218,47 +229,68 @@ plot_simulation <- function(simulated_season_df, plot = c(Wins, points, Percent)
     theme_fvoa()
 }
 
-plot_quadrant <- function(quadrants) {
+#' @export
+plot_quadrant <- function(quadrants, x = c("pf", "pa", "delta")) {
+
+  x <- match.arg(x)
+
+  x_label <- case_when(
+    x == "pf" ~ "Points Scored",
+    x == "pa" ~ "Points Against",
+    x == "delta" ~ "Point Differential"
+  )
+
+  quadrants <- select(quadrants,
+                      team = starts_with("team"), wp, x_axis = x)
+
+  x_intercept <- case_when(
+    x == "pf" ~ mean(quadrants$x_axis),
+    x == "pa" ~ mean(quadrants$x_axis),
+    x == "delta" ~ 0
+  )
 
   quadrants %>%
-    ggplot(aes(delta, win_pct)) +
+    ggplot(aes(x_axis, wp)) +
     geom_point() +
     geom_hline(yintercept = 0.5) +
-    geom_vline(xintercept = 0) +
+    geom_vline(xintercept = x_intercept) +
     annotate("text",
-             x = max(df$delta) / 2,
-             y = (max(df$win_pct) - 0.5) / 2 + 0.5,
+             x = (max(quadrants$x_axis) - x_intercept) / 2 + x_intercept,
+             y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
              size = 8,
              label = "Good",
              color = "grey65") +
     annotate("text",
-             x = max(df$delta) / 2,
-             y = (min(df$win_pct) - 0.5) / 2 + 0.5,
+             x = (max(quadrants$x_axis) - x_intercept) / 2 + x_intercept,
+             y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
              size = 8,
              label = "Unlucky",
              color = "grey65") +
     annotate("text",
-             x = min(df$delta) / 2,
-             y = (max(df$win_pct) - 0.5) / 2 + 0.5,
+             x = x_intercept - (x_intercept - min(quadrants$x_axis)) / 2,
+             y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
              size = 8,
              label = "Lucky",
              color = "grey65") +
     annotate("text",
-             x = min(df$delta) / 2,
-             y = (min(df$win_pct) - 0.5) / 2 + 0.5,
+             x = x_intercept - (x_intercept - min(quadrants$x_axis)) / 2,
+             y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
              size = 8,
              label = "Bad",
              color = "grey65") +
     ggrepel::geom_text_repel(aes(label = team)) +
-    scale_y_continuous(labels = scales::percent) +
+    scale_y_continuous(labels = scales::percent,
+                       limits = c(0, 1),
+                       expand = c(0, 0)) +
     tidyquant::theme_tq() +
     labs(y = "Win Percentage",
-         x = "Point Differential") +
+         x = x_label) +
     tidyquant::scale_color_tq() +
     guides(color = F)
 
 }
 
+#' @export
 plot_sim_matchup <- function(sim_scores, team1, team2,
                              week, square = FALSE) {
 
@@ -298,6 +330,7 @@ plot_sim_matchup <- function(sim_scores, team1, team2,
 
 }
 
+#' @export
 # add win bins?
 plot_exp_wpct <- function(scores, schedule) {
 
@@ -343,6 +376,7 @@ plot_exp_wpct <- function(scores, schedule) {
 
 }
 
+#' @export
 plot_pos_contribution <- function(teams, team = NULL, season = F, group = c("team", "Position")) {
 
   if(season) {
@@ -350,7 +384,7 @@ plot_pos_contribution <- function(teams, team = NULL, season = F, group = c("tea
     if(group[1] == "Position") {
 
       teams %>%
-        filter(Lineup != "BN", week < 16) %>%
+        filter(!Lineup %in% c("BN", "IR"), week < 16) %>%
         mutate(Position = case_when(
           Position %in% c("CB", "S", "DB") ~ "DB",
           Position %in% c("DE", "DT", "DL", "LB") ~ "DL",
@@ -371,7 +405,7 @@ plot_pos_contribution <- function(teams, team = NULL, season = F, group = c("tea
     } else {
 
       teams %>%
-        filter(Lineup != "BN", week < 16) %>%
+        filter(!Lineup %in% c("BN", "IR"), week < 16) %>%
         mutate(Position = case_when(
           Position %in% c("CB", "S", "DB") ~ "DB",
           Position %in% c("DE", "DT", "DL", "LB") ~ "DL",
@@ -395,7 +429,7 @@ plot_pos_contribution <- function(teams, team = NULL, season = F, group = c("tea
   } else {
 
     teams %>%
-      dplyr::filter(Lineup != "BN", week < 16, team == team) %>%
+      dplyr::filter(!Lineup %in% c("BN", "IR"), week < 16, team == team) %>%
       mutate(Position = case_when(
         Position %in% c("CB", "S", "DB") ~ "DB",
         Position %in% c("DE", "DT", "DL", "LB") ~ "DL",
@@ -417,7 +451,11 @@ plot_pos_contribution <- function(teams, team = NULL, season = F, group = c("tea
 
 }
 
+#' @export
 plot_model_eval_weekly <- function(evaluation_df) {
+
+  n_teams <- n_distinct(select(evaluation_df, starts_with("team")))
+  benchmark <- n_teams^2 - n_teams
 
   evaluation_df %>%
     group_by(week) %>%
@@ -449,6 +487,7 @@ plot_model_eval_weekly <- function(evaluation_df) {
     guides(fill=F)
 }
 
+#' @export
 plot_model_eval_calibration <- function(evaluation_tiers) {
 
   evaluation_tiers %>%

@@ -1,39 +1,65 @@
 
+#' @export
 simulate_season <- function(scores,
-                            season_weeks = 15,
                             n_sims,
-                            .fun = simulate_score,
-                            min_score = 50,
-                            reg_games = 6,
-                            progress = FALSE) {
+                            season_weeks = 15,
+                            .fun = simulate_score) {
 
   team_col <- names(select(scores, starts_with("team")))
-  scores <- select(scores, week, team = starts_with("team"), score)
-  teams <- unique(scores$team)
-  remaining_weeks <- (max(scores$week) + 1):season_weeks
+  scores_tmp <- scores %>%
+    extract_scores() %>%
+    select(week, team = starts_with("team"), score)
+  teams <- unique(scores_tmp$team)
+  remaining_weeks <- (max(scores_tmp$week) + 1):season_weeks
 
   # library(furrr)
   # plan(multiprocess)
 
-  tibble(sim = 1:n_sims) %>%
+  out <- tibble(sim = 1:n_sims) %>%
     mutate(data = map(sim,
-                      ~ simulate_single_season(scores = scores,
+                      ~ simulate_single_season(scores = scores_tmp,
                                                season_weeks = season_weeks,
                                                sim = .x,
                                                .fun = .fun,
-                                               min_score = min_score,
-                                               reg_games = reg_games,
-                                               reg_points = reg_points),
+                                               .min_score = 50,
+                                               .reg_games = 6,
+                                               .reg_points = 110),
                       .progress = progress)) %>%
     unnest(data) %>%
     set_names("sim", "week", team_col, "score")
 
+  if("player" %in% names(scores)) {
+
+    out <- out %>%
+      rename(sim_week = week) %>%
+      mutate(league = scores$league[1],
+             leagueID = scores$leagueID[1],
+             season = scores$season[1],
+             week = max(scores$week),
+             .before = 1)
+
+  }
+
+  return(out)
+
 }
 
+#' @export
 simulate_record <- function(sim_season, schedule, weeks_played) {
 
   team_col <- names(select(sim_season, starts_with("team")))
-  sim_season <- select(sim_season, sim, week, team = starts_with("team"), score)
+
+  if("league" %in% names(sim_season)) {
+
+    sim_season_tmp <- select(sim_season, sim, week = sim_week,
+                             team = starts_with("team"), score)
+
+  } else {
+
+    sim_season_tmp <- select(sim_season, sim, week,
+                             team = starts_with("team"), score)
+
+  }
 
   if("teamID" %in% names(schedule) | "team" %in% names(schedule)) {
     schedule <- spread_schedule(schedule)
@@ -43,11 +69,11 @@ simulate_record <- function(sim_season, schedule, weeks_played) {
 
   final_record <- schedule %>%
     mutate_if(is.factor, as.character) %>%
-    inner_join(sim_season %>%
+    inner_join(sim_season_tmp %>%
                  rename(team1 = team,
                         score1 = score),
                by = c("week", "team1")) %>%
-    inner_join(sim_season %>%
+    inner_join(sim_season_tmp %>%
                  rename(team2 = team,
                         score2 = score),
                by = c("week", "team2", "sim")) %>%
@@ -69,7 +95,7 @@ simulate_record <- function(sim_season, schedule, weeks_played) {
     arrange(sim, -wins, -losses) %>%
     mutate_if(is.numeric, as.integer)
 
-  sim_season %>%
+  out <- sim_season_tmp %>%
     group_by(team, sim) %>%
     summarise(points = sum(score)) %>%
     ungroup() %>%
@@ -80,15 +106,30 @@ simulate_record <- function(sim_season, schedule, weeks_played) {
     set_names(team_col, "sim", "points", "wins",
               "pl_wins", "losses", "tie")
 
+  if("league" %in% names(sim_season)) {
+
+    out <- out %>%
+      mutate(league = sim_season$league[1],
+             leagueID = sim_season$leagueID[1],
+             season = sim_season$season[1],
+             week = max(sim_season$week),
+             .before = 1)
+
+
+  }
+
+  return(out)
+
 }
 
+#' @export
 simulate_ranking <- function(sim_record, weeks_played) {
 
   team_col <- names(select(sim_record, starts_with("team")))
-  sim_record <- select(sim_record, team = starts_with("team"), sim:tie)
-  teams <- unique(sim_season$team)
+  sim_record_tmp <- select(sim_record, team = starts_with("team"), sim:tie)
+  teams <- unique(sim_record_tmp$team)
 
-  sim_record %>%
+  out <- sim_record_tmp %>%
     nest(data = -sim) %>%
     mutate(playoff = map(data,
                          ~ .x %>%
@@ -109,6 +150,18 @@ simulate_ranking <- function(sim_record, weeks_played) {
               "percent", "rank", "week") %>%
     select(week, everything())
 
+  if("league" %in% names(sim_record)) {
+
+    out <- out %>%
+      mutate(league = sim_record$league[1],
+             leagueID = sim_record$leagueID[1],
+             season = sim_record$season[1],
+             week = max(sim_record$week),
+             .before = 1)
+
+  }
+
+  return(out)
 
 }
 
@@ -117,32 +170,33 @@ simulate_ranking <- function(sim_record, weeks_played) {
 
 simulate_score <- function(scores,
                            .team,
-                           reps = 1,
-                           min_score = 50,
-                           reg_games = 6,
-                           reg_points = 110) {
+                           .reps = 1,
+                           .min_score = 50,
+                           .reg_games = 6,
+                           .reg_points = 110) {
 
   tmp <- scores %>%
+    extract_scores() %>%
     select(week, team = starts_with("team"), score) %>%
     filter(team == .team)
 
   team_scores <- tmp$score
 
-  weighting <- weight_games(team_scores, reg_games)
+  weighting <- weight_games(team_scores, .reg_games)
 
-  if (max(tmp$week) < reg_games) {
+  if (max(tmp$week) < .reg_games) {
 
-    team_scores <- c(team_scores, reg_points)
+    team_scores <- c(team_scores, .reg_points)
 
   }
 
   scores <- rnorm(
-    reps,
+    .reps,
     weighted.mean(team_scores, weighting),
     weighted_sd(team_scores, weighting, method="ML")
   )
 
-  if(!is.null(min_score)) {
+  if(!is.null(.min_score)) {
 
     scores <- if_else(scores < 50, 50, scores)
 
@@ -156,9 +210,7 @@ simulate_single_season <- function(scores,
                                    season_weeks = 15,
                                    sim = NULL,
                                    .fun = simulate_score,
-                                   min_score = 50,
-                                   reg_games = 6,
-                                   reg_points = 115) {
+                                   ...) {
 
   set.seed(sim)
 
@@ -174,9 +226,7 @@ simulate_single_season <- function(scores,
 
       simulated_score <- .fun(scores,
                               team,
-                              min_score = min_score,
-                              reg_games = reg_games,
-                              reg_points = reg_points)
+                              ...)
 
       scores <- scores %>%
         add_row(week = week,
