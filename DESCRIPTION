@@ -24,6 +24,7 @@ Imports:
     tibble (>= 1.4.0),
     tidyr (>= 0.8.0)
 Suggests: 
+    furrr (>= 0.1.0),
     ggridges (>= 0.5.0),
     progress (>= 1.2.0),
     testthat (>= 2.3.0)

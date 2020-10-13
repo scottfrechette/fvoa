@@ -4,7 +4,9 @@ simulate_season <- function(scores,
                             n_sims,
                             season_weeks = 15,
                             .fun = simulate_score,
-                            ...) {
+                            ...,
+                            .parallel = TRUE,
+                            .progress = FALSE) {
 
   team_col <- names(select(scores, starts_with("team")))
   scores_tmp <- scores %>%
@@ -13,18 +15,35 @@ simulate_season <- function(scores,
   teams <- unique(scores_tmp$team)
   remaining_weeks <- (max(scores_tmp$week) + 1):season_weeks
 
-  # library(furrr)
-  # plan(multiprocess)
+  if(.parallel) {
 
-  out <- tibble(sim = 1:n_sims) %>%
-    mutate(data = map(sim,
-                      simulate_single_season,
-                      scores = scores_tmp,
-                      season_weeks = season_weeks,
-                      .fun = .fun,
-                      ...)) %>%
-    unnest(data) %>%
-    set_names("sim", "week", team_col, "score")
+    future::plan(multiprocess)
+    options(future.rng.onMisuse = 'ignore')
+
+    out <- tibble(sim = 1:n_sims) %>%
+      mutate(data = furrr::future_map(sim,
+                                      simulate_single_season,
+                                      scores = scores_tmp,
+                                      season_weeks = season_weeks,
+                                      .fun = .fun,
+                                      ...,
+                                      .progress = .progress)) %>%
+      unnest(data) %>%
+      set_names("sim", "week", team_col, "score")
+
+  } else {
+
+    out <- tibble(sim = 1:n_sims) %>%
+      mutate(data = map(sim,
+                        simulate_single_season,
+                        scores = scores_tmp,
+                        season_weeks = season_weeks,
+                        .fun = .fun,
+                        ...)) %>%
+      unnest(data) %>%
+      set_names("sim", "week", team_col, "score")
+
+  }
 
   if("player" %in% names(scores)) {
 
