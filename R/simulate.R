@@ -3,7 +3,8 @@
 simulate_season <- function(scores,
                             n_sims,
                             season_weeks = 15,
-                            .fun = simulate_score) {
+                            .fun = simulate_score,
+                            ...) {
 
   team_col <- names(select(scores, starts_with("team")))
   scores_tmp <- scores %>%
@@ -17,14 +18,11 @@ simulate_season <- function(scores,
 
   out <- tibble(sim = 1:n_sims) %>%
     mutate(data = map(sim,
-                      ~ simulate_single_season(scores = scores_tmp,
-                                               season_weeks = season_weeks,
-                                               sim = .x,
-                                               .fun = .fun,
-                                               .min_score = 50,
-                                               .reg_games = 6,
-                                               .reg_points = 110),
-                      .progress = progress)) %>%
+                      simulate_single_season,
+                      scores = scores_tmp,
+                      season_weeks = season_weeks,
+                      .fun = .fun,
+                      ...)) %>%
     unnest(data) %>%
     set_names("sim", "week", team_col, "score")
 
@@ -190,7 +188,7 @@ simulate_score <- function(scores,
 
   }
 
-  scores <- rnorm(
+  sim_scores <- rnorm(
     .reps,
     weighted.mean(team_scores, weighting),
     weighted_sd(team_scores, weighting, method="ML")
@@ -198,11 +196,11 @@ simulate_score <- function(scores,
 
   if(!is.null(.min_score)) {
 
-    scores <- if_else(scores < 50, 50, scores)
+    sim_scores <- if_else(sim_scores < .min_score, as.numeric(.min_score), sim_scores)
 
   }
 
-  round(scores, 2)
+  round(sim_scores, 2)
 
 }
 

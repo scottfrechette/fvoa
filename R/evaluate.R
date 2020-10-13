@@ -95,8 +95,8 @@ evaluate_lineup <- function(lineup_df,
   } else {
 
     best_lineup_final %>%
-    set_names(team_col, "week", "max", "score",
-              "delta", "sign", "avg")
+      set_names(team_col, "week", "max", "score",
+                "delta", "sign", "avg")
 
   }
 }
@@ -105,10 +105,7 @@ evaluate_lineup <- function(lineup_df,
 evaluate_model <- function(scores,
                            evaluation_week,
                            .fun = simulate_score,
-                           .reg_games = 6,
-                           .reg_points = 108,
-                           .min_score = 50,
-                           .reps = 1e6) {
+                           ...) {
 
   team_col <- names(select(scores, starts_with("team")))
   scores_tmp <- scores %>%
@@ -127,11 +124,13 @@ evaluate_model <- function(scores,
   set.seed(42)
 
   pred_scores <- actual_scores %>%
-    mutate(sim1 = map(team1, ~ .fun(previous_scores, .x, .reps = .reps, ...)))
+    mutate(sim1 = map(team1, .fun,
+                      scores = previous_scores,
+                      ...))
 
   out <- crossing(pred_scores,
-           rename(pred_scores,
-                  team2 = team1, score2 = score1, sim2 = sim1)) %>%
+                  rename(pred_scores,
+                         team2 = team1, score2 = score1, sim2 = sim1)) %>%
     filter(team1 != team2) %>%
     mutate(margin = score1 - score2,
            sim = map2(sim1, sim2, ~ .x - .y),

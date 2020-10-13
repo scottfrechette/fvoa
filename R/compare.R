@@ -70,7 +70,6 @@ compare_teams <- function(scores,
 #' @export
 compare_league <- function(scores,
                            .fun = simulate_score,
-                           .reps = 1e6,
                            ...) {
 
   scores <- extract_scores(scores)
@@ -80,7 +79,10 @@ compare_league <- function(scores,
   set.seed(42)
 
   team_scores <- tibble(team1 = teams) %>%
-    mutate(score1 = map(team1, ~ .fun(scores, .x, .reps = .reps, ...)))
+    mutate(score1 = map(team1,
+                        .fun,
+                        scores = scores,
+                        ...))
 
   crossing(team_scores,
            rename(team_scores, team2 = team1, score2 = score1)) %>%
@@ -98,7 +100,8 @@ compare_current_matchups <- function(scores,
                                      schedule,
                                      current_week,
                                      win_prob = NULL,
-                                     .fun = simulate_score) {
+                                     .fun = simulate_score,
+                                     ...) {
 
   set.seed(42)
 
@@ -116,31 +119,18 @@ compare_current_matchups <- function(scores,
     filter(week == current_week) %>%
     mutate_if(is.factor, as.character) %>%
     mutate(fvoa_wp = map2_dbl(team1, team2,
-                              ~compare_teams(scores = scores,
-                                             team1 = .x,
-                                             team2 = .y,
-                                             .fun = .fun,
-                                             .output = "prob",
-                                             .verbose = FALSE,
-                                             .reps = 1e6,
-                                             .min_score = 50,
-                                             .reg_games = 6,
-                                             .reg_points = 110))) %>%
+                              compare_teams,
+                              scores = scores,
+                              ...)) %>%
     arrange(-fvoa_wp) %>%
     head(cutoff) %>%
     mutate(Line = map_chr(fvoa_wp, prob_to_odds),
            fvoa_wp = round(fvoa_wp/100, 2) %>% format_pct,
            Spread = map2_chr(team1, team2,
-                             ~compare_teams(scores = scores,
-                                            team1 = .x,
-                                            team2 = .y,
-                                            .fun = .fun,
-                                            .output = "spread",
-                                            .verbose = FALSE,
-                                            .reps = 1e6,
-                                            .min_score = 50,
-                                            .reg_games = 6,
-                                            .reg_points = 110))) %>%
+                             compare_teams,
+                             scores = scores,
+                             .output = "spread",
+                             ...)) %>%
     select(Winner = team1,
            Loser = team2,
            FVOA = fvoa_wp,
@@ -154,7 +144,8 @@ compare_current_matchups <- function(scores,
                 by = c("Winner" = "team")) %>%
       select(Winner, Loser,
              FVOA, Yahoo,
-             Spread, Line)
+             Spread,
+             Line)
   }
 
   current_matchups
