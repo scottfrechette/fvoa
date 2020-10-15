@@ -1,29 +1,34 @@
 Type: Package
 Package: fvoa
 Title: Frech-Adjusted Value Over Average for Fantasy Football
-Version: 0.0.0.9000
+Version: 1.0.0
 Author: Scott Frechette <scottfrechette@gmail.com>
 Maintainer: Scott Frechette <scottfrechette@gmail.com>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
+Description: Package that scrapes fantasy information from ESPN and Yahoo Fantasy Football and 
+    can uses data to compare teams, simulate seasons, and create visuals. Essentially everything 
+    you need to build analytics behind your trash-talking.
 License: CC0
+Depends: 
+    R (>= 2.10),
+    tidyverse (>= 1.3)
 Imports: 
-    dplyr (>= 0.7.6),
+    dplyr (>= 0.7.0),
     ggplot2 (>= 3.0.0),
-    lubridate (>= 1.7.4),
+    lubridate (>= 1.7.0),
     magrittr (>= 1.5),
-    purrr,
-    rlang (>= 0.2.1),
-    rvest (>= 0.3.2),
+    purrr (>= 0.3.0),
+    rlang (>= 0.2.0),
+    rvest (>= 0.3.0),
     scales (>= 0.5.0),
-    stringr (>= 1.3.1),
-    tibble (>= 1.4.2),
-    tidyr (>= 0.8.1)
+    stringr (>= 1.3.0),
+    tibble (>= 1.4.0),
+    tidyr (>= 0.8.0)
 Suggests: 
-    ggridges,
+    furrr (>= 0.1.0),
+    ggridges (>= 0.5.0),
     progress (>= 1.2.0),
-    testthat
+    testthat (>= 2.3.0)
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 6.1.0
+RoxygenNote: 7.1.1
