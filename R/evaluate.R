@@ -195,9 +195,11 @@ evaluate_brier <- function(evaluation_df) {
 }
 
 #' @export
-evaluate_team_accuracy <- function(evaluation_df) {
+evaluate_team_accuracy <- function(evaluation_df, .latest = TRUE) {
 
   team_col <- names(select(evaluation_df, starts_with("team")))
+
+  if(.latest) filter(evaluation_df, week == max(week))
 
   evaluation_df %>%
     select(team = starts_with("team"), correct) %>%

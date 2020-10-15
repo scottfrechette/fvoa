@@ -156,9 +156,8 @@ wide_to_long <- function(df, new, ...) {
   df %>%
     unite(tmp, !!!old_cols) %>%
     mutate(tmp = map(tmp, strsplit, "_")) %>%
-    unnest() %>%
-    unnest() %>%
-    mutate(tmp = factor(tmp)) %>%
+    unnest(tmp) %>%
+    unnest(tmp) %>%
     rename(!!new_name := tmp)
 
 }

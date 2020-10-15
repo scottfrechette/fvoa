@@ -122,7 +122,8 @@ calculate_fvoa <- function(scores) {
   team_col <- names(select(scores, starts_with("team")))
   scores <- select(scores, week, team = starts_with("team"), score)
 
-  compare_league(scores, .output = "prob") %>%
+  compare_league(scores, .reps = 1e6) %>%
+    spread_league(.output = "wp") %>%
     select(-team) %>%
     map_df(function(x) {round((mean(100 - x, na.rm = T) - 50) / 0.5, 2)}) %>%
     gather(team, fvoa) %>%

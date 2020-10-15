@@ -17,7 +17,7 @@ simulate_season <- function(scores,
 
   if(.parallel) {
 
-    future::plan(multiprocess)
+    future::plan(future::multiprocess)
     options(future.rng.onMisuse = 'ignore')
 
     out <- tibble(sim = 1:n_sims) %>%

@@ -143,19 +143,24 @@ plot_team_evaluation <- function(df) {
 #' @export
 plot_playoff_leverage <- function(scores, schedule, playoff_leverage_df) {
 
+  playoff_leverage_df <- playoff_leverage_df %>%
+    select(team = starts_with("team"), sim:tie)
+
   sims <- max(playoff_leverage_df$sim)
 
   if("team" %in% names(schedule)) {
-    schedule <- schedule %>%
-      spread_schedule() %>%
-      doublewide_schedule()
+    schedule <- spread_schedule(schedule)
+  }
+
+  if(unique(count(schedule, week)$n) != n_distinct(schedule$team1)) {
+    schedule <- doublewide_schedule(schedule)
   }
 
   schedule %>%
     filter(week == max(scores$week) + 1) %>%
     mutate(tmp = list(playoff_leverage_df)) %>%
     unnest(tmp) %>%
-    mutate(sim_wins = Wins,
+    mutate(sim_wins = wins,
            wins_with_loss = pl_wins,
            wins_with_win = pl_wins + 1L,
            wins = case_when(
@@ -163,36 +168,41 @@ plot_playoff_leverage <- function(scores, schedule, playoff_leverage_df) {
              team == team2 ~ wins_with_loss,
              TRUE ~ sim_wins
            )) %>%
-    select(week:team, wins) %>%
+    select(week:team, sim, wins) %>%
     arrange(-wins) %>%
     group_by(team1, sim) %>%
     mutate(row = row_number(),
            playoff = if_else(row <= 4, 1, 0)) %>%
     ungroup() %>%
     group_by(team1, team) %>%
-    summarise(Percent = sum(playoff/sims * 100)) %>%
+    summarise(Percent = sum(playoff/sims * 100),
+              .groups = "drop") %>%
     arrange(team1, -Percent) %>%
     rename(Winner = team1) %>%
-    nest(team:Percent) %>%
+    nest(data = c(team, Percent)) %>%
     left_join(schedule %>%
                 filter(week == max(scores$week) + 1) %>%
                 select(-week) %>%
-                rename(Winner = team1, Loser = team2), by = "Winner") %>%
+                rename(Winner = team1, Loser = team2),
+              by = "Winner") %>%
     select(Winner, Loser, data) %>%
-    unnest() %>%
+    unnest(data) %>%
     filter(Winner == team | Loser == team) %>%
     arrange(team) %>%
     mutate(style = if_else(Winner == team, "Win", "Lose")) %>%
     select(team:style) %>%
-    spread(style, Percent) %>%
-    mutate(delta = round(Win - Lose, 1), Total = 100) %>%
+    spread(style, Percent, fill = 0) %>%
+    mutate(delta = round(Win - Lose, 1),
+           Total = 100) %>%
     ggplot(aes(reorder(team, Win), y = Total)) +
     geom_bar(stat = "identity", fill = "white", color = "grey", alpha = 0.4) +
     geom_bar(stat = "identity", aes(y = Win, fill = team), alpha = 0.5) +
     geom_bar(stat = "identity", aes(y = Lose, fill = team)) +
     geom_text(aes(y = Total + 0.5, label = paste0(delta, "%")), color = "grey30", hjust = 0) +
     # geom_text(aes(label = paste0(delta, "%"), group = team), color = "grey30", nudge_y = 5) +
-    scale_y_continuous(limits = c(0, 105), breaks = c(0, 25, 50, 75, 100)) +
+    scale_y_continuous(limits = c(0, 105),
+                       expand = c(0, NA),
+                       breaks = c(0, 25, 50, 75, 100)) +
     guides(fill = FALSE) +
     labs(x = "",
          y = "Chance to Make Playoffs",
@@ -479,8 +489,8 @@ plot_model_eval_weekly <- function(evaluation_df) {
     scale_fill_manual(values = c(equal = "#619CFF",
                                  negative = "#F8766D",
                                  positive = "#00BA38")) +
-    labs(title = "weekly Evaluation of Model",
-         x = "week (starting with week 2)",
+    labs(title = "Weekly Evaluation of Model",
+         x = "Week (starting with week 2)",
          y = "Percent Correct") +
     theme(panel.background= element_blank(),
           panel.border = element_blank()) +

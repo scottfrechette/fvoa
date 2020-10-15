@@ -237,6 +237,7 @@ convert_spread <- function(sim) {
 
 }
 
+#' @export
 spread_league <- function(league_comparison,
                           .output = c("wp", "odds", "spread"),
                           .matrix = FALSE) {

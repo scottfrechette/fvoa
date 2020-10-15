@@ -181,18 +181,19 @@ extract_scores <- function(team) {
 
 }
 
+#' @export
 extract_projections <- function(team) {
 
   team_col <- names(select(team, starts_with("team")))
 
   team %>%
-    filter(!roster %in% c("BN", "IR")) %>%
-    select(week, team = starts_with("team"), score, proj_pts) %>%
-    group_by(week, team) %>%
-    summarize(proj = sum(proj_pts),
+    dplyr::filter(!roster %in% c("BN", "IR")) %>%
+    dplyr::select(week, team = starts_with("team"), score, proj_pts) %>%
+    dplyr::group_by(week, team) %>%
+    dplyr::summarize(proj = sum(proj_pts),
               act = score[1],
               .groups = "drop") %>%
-    set_names("week", team_col, "proj", "act")
+    purrr::set_names("week", team_col, "proj", "act")
 
 }
 
@@ -664,10 +665,10 @@ spread_schedule <- function(schedule, week = week,
 
 }
 
-gather_schedule <- function(schedule, team = team,
+gather_schedule <- function(schedule, teamID = teamID,
                             team1 = team1, team2 = team2) {
 
-  wide_to_long(schedule, team, team1, team2)
+  wide_to_long(schedule, teamID, team1, team2)
 
 }
 
