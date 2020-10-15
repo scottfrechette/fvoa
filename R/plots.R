@@ -174,21 +174,18 @@ plot_playoff_leverage <- function(scores, schedule, playoff_leverage_df) {
     mutate(row = row_number(),
            playoff = if_else(row <= 4, 1, 0)) %>%
     ungroup() %>%
-<<<<<<< HEAD
     group_by(Team1, Team) %>%
     summarise(Percent = sum(playoff/sims * 100)) %>%
     ungroup() %>%
     arrange(Team1, -Percent) %>%
     rename(Winner = Team1) %>%
     nest(Team:Percent) %>%
-=======
     group_by(team1, team) %>%
     summarise(Percent = sum(playoff/sims * 100),
               .groups = "drop") %>%
     arrange(team1, -Percent) %>%
     rename(Winner = team1) %>%
     nest(data = c(team, Percent)) %>%
->>>>>>> dev
     left_join(schedule %>%
                 filter(week == max(scores$week) + 1) %>%
                 select(-week) %>%
