@@ -272,25 +272,29 @@ plot_quadrant <- function(quadrants, x = c("pf", "pa", "delta")) {
     geom_vline(xintercept = x_intercept) +
     annotate("text",
              x = (max(quadrants$x_axis) - x_intercept) / 2 + x_intercept,
-             y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
+             # y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
+             y = 0.75,
              size = 8,
              label = "Good",
              color = "grey65") +
     annotate("text",
              x = (max(quadrants$x_axis) - x_intercept) / 2 + x_intercept,
-             y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
+             # y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
+             y = 0.25,
              size = 8,
              label = "Unlucky",
              color = "grey65") +
     annotate("text",
              x = x_intercept - (x_intercept - min(quadrants$x_axis)) / 2,
-             y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
+             # y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
+             y = 0.75,
              size = 8,
              label = "Lucky",
              color = "grey65") +
     annotate("text",
              x = x_intercept - (x_intercept - min(quadrants$x_axis)) / 2,
-             y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
+             # y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
+             y = 0.25,
              size = 8,
              label = "Bad",
              color = "grey65") +
@@ -298,10 +302,10 @@ plot_quadrant <- function(quadrants, x = c("pf", "pa", "delta")) {
     scale_y_continuous(labels = scales::percent,
                        limits = c(0, 1),
                        expand = c(0, 0)) +
-    tidyquant::theme_tq() +
+    theme_fvoa() +
+    theme(panel.grid.major.y = element_blank()) +
     labs(y = "Win Percentage",
          x = x_label) +
-    tidyquant::scale_color_tq() +
     guides(color = F)
 
 }
