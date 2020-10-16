@@ -199,7 +199,7 @@ evaluate_team_accuracy <- function(evaluation_df, .latest = TRUE) {
 
   team_col <- names(select(evaluation_df, starts_with("team")))
 
-  if(.latest) filter(evaluation_df, week == max(week))
+  if(.latest) evaluation_df <- filter(evaluation_df, week == max(week))
 
   evaluation_df %>%
     select(team = starts_with("team"), correct) %>%
