@@ -104,13 +104,18 @@ scrape_player_projections <- function(league, leagueID, week, season = 2020) {
 
   name_removals <- "\\.| I$| II$| III$| IV$| V$| Jr.$| Sr.$"
 
-  player_table <- scrape_player_ids(season) %>%
-    dplyr::select(id, player, position) %>%
-    dplyr::mutate(player = str_remove_all(player, name_removals))
+  player_table_tmp <- scrape_player_ids(season) %>%
+    select(id, player, position) %>%
+    mutate(player = str_remove_all(player, name_removals),
+           position = case_when(
+             position %in% c("CB", "S")  ~ "DB",
+             position %in% c("DT", "DE") ~ "DL",
+             TRUE                        ~ position
+           ))
 
   if (league == "yahoo") {
 
-    out <- crossing(position = c("QB", "RB", "WR", "TE",
+    tmp <- crossing(position = c("QB", "RB", "WR", "TE",
                                  "K", "DEF", "DB", "DL"),
                     page = seq(0, 75, by = 25)) %>%
       mutate(data = map2(position, page,
@@ -122,10 +127,27 @@ scrape_player_projections <- function(league, leagueID, week, season = 2020) {
              season = season,
              week = week,
              player = str_remove_all(player, name_removals),
-             teamID = if_else(str_detect(teamID, "^[A-Z] [()]"), "FA", teamID)) %>%
-      inner_join(player_table, by = c("player", "position")) %>%
+             position = if_else(position == "DEF", "DST", position),
+             teamID = if_else(str_detect(teamID, "^[A-Z] [()]"), "FA", teamID))
+
+    out <- bind_rows(
+      tmp %>%
+        filter(!position %in% c("DB", "DL", "DST")) %>%
+        inner_join(player_table_tmp, by = c("player", "position")),
+      tmp %>%
+        filter(position %in% c("DB", "DL")) %>%
+        inner_join(player_table_tmp,
+                   by = c("player", "position")),
+      tmp %>%
+        filter(position == "DST") %>%
+        inner_join(player_table_tmp %>%
+                     filter(position == "DST") %>%
+                     mutate(player = str_remove(player, " [A-z]*$")),
+                   by = c("player", "position"))
+    ) %>%
       select(league, leagueID, season, week,
-             teamID, playerID, player, position)
+             teamID, playerID, player, position) %>%
+      distinct()
 
   } else if (league == "espn") {
 
@@ -140,12 +162,12 @@ scrape_player_projections <- function(league, leagueID, week, season = 2020) {
         filter(position != "DST",
                nfl_team > 0) %>%
         mutate(player = str_remove_all(player, name_removals)) %>%
-        inner_join(player_table,
+        inner_join(player_table_tmp,
                    by = c("player", "position")),
       espn_players %>%
         filter(position == "DST") %>%
         mutate(player = str_remove(player, " D/ST")) %>%
-        inner_join(player_table %>%
+        inner_join(player_table_tmp %>%
                      mutate(player = str_extract(player, "\\w*$")),
                    by = c("player", "position"))
     ) %>%
