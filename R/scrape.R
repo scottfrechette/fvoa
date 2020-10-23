@@ -145,8 +145,8 @@ scrape_player_projections <- function(league, leagueID, week, season = 2020) {
                      mutate(player = str_remove(player, " [A-z]*$")),
                    by = c("player", "position"))
     ) %>%
-      select(league, leagueID, season, week,
-             teamID, playerID, player, position) %>%
+      select(league, leagueID, season, week, teamID,
+             playerID, player, position, id) %>%
       distinct()
 
   } else if (league == "espn") {
@@ -171,12 +171,12 @@ scrape_player_projections <- function(league, leagueID, week, season = 2020) {
                      mutate(player = str_extract(player, "\\w*$")),
                    by = c("player", "position"))
     ) %>%
-      mutate(league = "yahoo",
+      mutate(league = "espn",
              leagueID = leagueID,
              season = season,
              week = week) %>%
-      select(league, leagueID, season, week,
-             teamID, playerID, player, position)
+      select(league, leagueID, season, week, teamID,
+             playerID, player, position, id)
 
   } else {
 
