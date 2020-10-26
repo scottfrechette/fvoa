@@ -6,8 +6,9 @@ compare_teams <- function(scores,
                           team1,
                           team2,
                           .fun = simulate_score,
-                          .output = c("prob", "odds", "spread"),
+                          .output = c("prob", "odds", "spread", "plot"),
                           .verbose = FALSE,
+                          .interactive = FALSE,
                           ...) {
 
   set.seed(42)
@@ -63,9 +64,48 @@ compare_teams <- function(scores,
                       if_else(spread < 0, paste(spread), paste(0)))
     return(spread)
 
+  } else if (.output == "plot") {
+
+    tbl <- tibble(t1 = sample(t1_sim, 10000),
+                  t2 = sample(t2_sim, 10000)) %>%
+      mutate(winner = if_else(t1 > t2, team1, team2)) %>%
+      add_count(winner) %>%
+      mutate(prop = scales::percent(n / 10000, accuracy = 0.1))
+
+    p <- tbl %>%
+      ggplot(aes(t1, t2, color = factor(winner),
+                 text = str_glue("{team1}: {t1}\n{team2}: {t2}"))) +
+      geom_point(alpha = 0.3) +
+      scale_x_continuous(limits = c(min(tbl$t1) - 2, max(tbl$t1) + 2),
+                         expand = c(0, NA)) +
+      scale_y_continuous(limits = c(min(tbl$t2) - 2, max(tbl$t2) + 2),
+                         expand = c(0, NA)) +
+      labs(x = str_glue("Simulated points: {team1}"),
+           y = str_glue("Simulated points:  {team2}"),
+           color = "Winner") +
+      annotate("text",
+               x = min(tbl$t1) + ((max(tbl$t1) - min(tbl$t1)) * 0.85),
+               y = min(tbl$t1) + ((max(tbl$t2) - min(tbl$t2)) * 0.15),
+               size = 5,
+               label = str_glue("{team1} better {unique(tbl[tbl$winner == team1,]$prop)}")) +
+      annotate("text",
+               y = min(tbl$t1) + ((max(tbl$t1) - min(tbl$t1)) * 0.85),
+               x = min(tbl$t1) + ((max(tbl$t2) - min(tbl$t2)) * 0.15),
+               size = 5,
+               label = str_glue("{team2} better {unique(tbl[tbl$winner == team2,]$prop)}")) +
+      theme_fvoa() +
+      theme(legend.position = "none",
+            legend.key = element_blank(),
+            panel.grid.major.y = element_blank())
+
+    if(.interactive) p <- plotly::ggplotly(p, tooltip = "text") %>% plotly::config(displayModeBar = F)
+
+    return(p)
+
   } else {NA}
 
 }
+
 
 #' @export
 compare_league <- function(scores,
