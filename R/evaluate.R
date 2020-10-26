@@ -105,7 +105,8 @@ evaluate_lineup <- function(lineup_df,
 evaluate_model <- function(scores,
                            evaluation_week,
                            .fun = simulate_score,
-                           ...) {
+                           ...,
+                           schedule = NULL) {
 
   team_col <- names(select(scores, starts_with("team")))
   scores_tmp <- scores %>%
@@ -168,6 +169,21 @@ evaluate_model <- function(scores,
              leagueID = scores$leagueID[1],
              season = scores$season[1],
              .before = 1)
+
+  }
+
+  if(!is.null(schedule)) {
+
+    sched <- schedule %>%
+      filter(week == evaluation_week) %>%
+      doublewide_schedule() %>%
+      select(teamID = team1, opp = team2, gameID)
+
+    out <- out %>%
+      left_join(sched,
+                by = c("teamID", "opp")) %>%
+      mutate(scheduled = !is.na(gameID)) %>%
+      select(-gameID)
 
   }
 
