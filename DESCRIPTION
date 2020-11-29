@@ -1,7 +1,7 @@
 Type: Package
 Package: fvoa
 Title: Frech-Adjusted Value Over Average for Fantasy Football
-Version: 1.0.0
+Version: 1.0.1
 Author: Scott Frechette <scottfrechette@gmail.com>
 Maintainer: Scott Frechette <scottfrechette@gmail.com>
 Description: Package that scrapes fantasy information from ESPN and Yahoo Fantasy Football and 

@@ -98,23 +98,25 @@ calculate_stats <- function(schedule, scores, league = "Yahoo") {
     drop_na() %>%
     gather(x, team, team1:team2) %>%
     mutate(score = if_else(x == "team1", score1, score2),
+           opp_score = if_else(x == "team1", score2, score1),
            tie = if_else(score1 == score2, 1, 0),
            win = if_else(x == "team1" & score1 - score2 > 0, 1,
                          if_else(x == "team2" & score2 - score1 > 0, 1, 0)),
            lose = if_else(tie == 0 & win == 0, 1, 0)) %>%
     group_by(team) %>%
-    summarise(points = sum(score),
+    summarise(pf = sum(score),
+              pa = sum(opp_score),
               wins = sum(win),
               losses = sum(lose),
-              tie = sum(tie)) %>%
-    mutate(percent = round(wins/(wins + losses + tie), 3)) %>%
-    arrange(-wins, -points) %>%
+              tie = sum(tie),
+              .groups = "drop") %>%
+    mutate(wp = wins / (wins + losses)) %>%
+    arrange(-wp, -pf) %>%
     mutate(rank = row_number(),
-           percent = format_pct(percent)) %>%
-    arrange(-wins, -points) %>%
+           wp = format_pct(wp, accuracy = 0)) %>%
     unite(record, c(wins, losses, tie), sep = "-") %>%
-    set_names(team_col, "points", "record",
-              "percent", rank_col)
+    set_names(team_col, "pf", "pa",
+              "record", "wp", rank_col)
 }
 
 calculate_fvoa <- function(scores) {
