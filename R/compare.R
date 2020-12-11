@@ -6,7 +6,7 @@ compare_teams <- function(scores,
                           team1,
                           team2,
                           .fun = simulate_score,
-                          .output = c("prob", "odds", "spread", "plot"),
+                          .output = c("prob", "odds", "spread", "over_under", "plot"),
                           .verbose = FALSE,
                           .interactive = FALSE,
                           ...) {
@@ -63,6 +63,12 @@ compare_teams <- function(scores,
     spread <- if_else(spread > 0, paste0("+", spread),
                       if_else(spread < 0, paste(spread), paste(0)))
     return(spread)
+
+  }  else if (.output == "over_under") {
+
+    ou <- round(mean(t1_sim + t2_sim))
+
+    return(ou)
 
   } else if (.output == "plot") {
 
@@ -140,6 +146,7 @@ compare_current_matchups <- function(scores,
                                      schedule,
                                      current_week,
                                      win_prob = NULL,
+                                     leverage = NULL,
                                      .fun = simulate_score,
                                      ...) {
 
@@ -170,22 +177,55 @@ compare_current_matchups <- function(scores,
                              compare_teams,
                              scores = scores,
                              .output = "spread",
+                             ...),
+           OU = map2_dbl(team1, team2,
+                             compare_teams,
+                             scores = scores,
+                             .output = "over_under",
                              ...)) %>%
     select(Winner = team1,
            Loser = team2,
-           FVOA = fvoa_wp,
+           `Win%` = fvoa_wp,
            Spread,
-           Line)
+           Line,
+           `O/U` = OU)
 
   if(!is.null(win_prob)) {
     current_matchups <- current_matchups %>%
       left_join(win_prob %>%
-                  rename(Yahoo = wp),
+                  rename(`Yahoo Win%` = wp),
                 by = c("Winner" = "team")) %>%
       select(Winner, Loser,
-             FVOA, Yahoo,
+             `FVOA Win%` = `Win%`,
+             `Yahoo Win%`,
              Spread,
-             Line)
+             Line,
+             `O/U`)
+  }
+
+  if(!is.null(leverage)) {
+
+    leverage_tmp <- select(leverage, team = starts_with("team"), sim:weeks_played)
+
+    team_leverage <- leverage_tmp %>%
+      group_by(team, leverage_win) %>%
+      dplyr::summarize(playoffs = mean(playoffs),
+                .groups = "drop") %>%
+      mutate(leverage_win = if_else(leverage_win == 1, "Win", "Lose")) %>%
+      spread(leverage_win, playoffs) %>%
+      mutate(leverage = Win - Lose) %>%
+      select(team, leverage)
+
+    current_matchups <- current_matchups %>%
+      left_join(team_leverage %>%
+                  rename(Winner = team, leverage_w = leverage),
+                by = "Winner") %>%
+      left_join(team_leverage %>%
+                  rename(Loser = team, leverage_l = leverage),
+                by = "Loser") %>%
+      mutate(Leverage = format_pct(leverage_w + leverage_l, accuracy = 0)) %>%
+      select(-leverage_w, -leverage_l)
+
   }
 
   current_matchups

@@ -144,10 +144,9 @@ simulate_final_standings <- function(sim_standings) {
 
   team_col <- names(select(sim_standings, starts_with("team")))
   weeks_played <- unique(sim_standings$weeks_played)
-  # sim_standings_tmp <- select(sim_standings, team = starts_with("team"), sim:tie)
-  # teams <- unique(sim_standings_tmp$team)
+  sim_standings_tmp <- select(sim_standings, team = starts_with("team"), sim:weeks_played)
 
-  out <- sim_standings %>%
+  out <- sim_standings_tmp %>%
     rename(team = 1) %>%
     group_by(team) %>%
     summarise(pf = round(mean(pf), 1),
@@ -157,11 +156,9 @@ simulate_final_standings <- function(sim_standings) {
               tie = round(mean(tie), 1),
               wp = mean(wp),
               playoffs = mean(playoffs),
-              # percent = sum(playoffs)/n_distinct(.$sim) * 100,
               .groups = "drop") %>%
     arrange(-playoffs, -wins, -pf) %>%
-    # arrange(-percent, -wins, -points) %>%
-    mutate(rank = 1L:n_distinct(sim_standings[1]),
+    mutate(rank = 1L:n_distinct(sim_standings_tmp$team),
            week = weeks_played) %>%
     set_names(team_col, "pf", "pa",
               "wins", "losses", "ties",

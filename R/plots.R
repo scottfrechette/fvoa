@@ -145,10 +145,12 @@ plot_playoff_leverage <- function(sim_standings) {
 
   current_week <- unique(sim_standings$weeks_played) + 1
 
-  sim_standings %>%
+  sim_standings_tmp <- select(sim_standings, team = starts_with("team"), sim:weeks_played)
+
+  sim_standings_tmp %>%
     rename(team = 1) %>%
     group_by(team, leverage_win) %>%
-    summarize(playoffs = mean(playoffs),
+    dplyr::summarize(playoffs = mean(playoffs),
               .groups = "drop") %>%
     mutate(leverage_win = if_else(leverage_win == 1, "Win", "Lose")) %>%
     spread(leverage_win, playoffs) %>%

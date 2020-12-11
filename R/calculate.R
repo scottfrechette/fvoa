@@ -216,3 +216,30 @@ calculate_colley <- function(schedule, scores) {
     arrange(colley_rank) %>%
     set_names(team_col, "colley_rating", "colley_rank")
 }
+
+calculate_proj <- function(scores) {
+
+  sliding_proj <- function(score, .reg_games = 6, .reg_points = 110) {
+
+    weighting <- weight_games(score, .reg_games)
+
+    if (length(score) < .reg_games) {
+
+      score <- c(score, .reg_points)
+
+    }
+
+    weighted.mean(score, weighting)
+
+  }
+
+  scores %>%
+    select(team = starts_with("team"), everything()) %>%
+    group_by(team) %>%
+    mutate(fvoa = slide_dbl(score, sliding_proj, .before = Inf),
+           fvoa_proj = lag(fvoa)) %>%
+    ungroup() %>%
+    select(team, week, fvoa_proj) %>%
+    drop_na()
+
+}
