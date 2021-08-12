@@ -1,3 +1,16 @@
+#' Pipe operator
+#'
+#' See \code{magrittr::\link[magrittr:pipe]{\%>\%}} for details.
+#'
+#' @name %>%
+#' @rdname pipe
+#' @keywords internal
+#' @export
+#' @importFrom magrittr %>%
+#' @usage lhs \%>\% rhs
+NULL
+
+
 weight_games <- function(x, reg_games = 6) {
 
   # Slightly penalize outliers
