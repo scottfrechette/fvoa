@@ -293,7 +293,7 @@ compare_playoff_teams <- function(scores,
          Odds = c(t1odds, t2odds, t3odds, t4odds),
          BettingLine = as.factor(c(t1Amodds, t2Amodds, t3Amodds, t4Amodds))) %>%
     arrange(-Percent) %>%
-    mutate(Percent = scales::percent(Percent))
+    mutate(Percent = scales::percent(Percent, accuracy = 1))
 }
 
 

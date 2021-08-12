@@ -362,8 +362,9 @@ scrape_espn_team <- function(leagueID = 299999, week = 1, season = 2020) {
 
     url <- str_glue("https://fantasy.espn.com/apis/v3/games/ffl/leagueHistory/{leagueID}?season={season}&view=mMatchup&view=mMatchupScore&scoringPeriodId={week}")
 
+    json_data <- jsonlite::fromJSON(url)
 
-    teams <- jsonlite::fromJSON(url) %>%
+    teams <- json_data %>%
       .$teams %>%
       .[[1]] %>%
       tidy_espn_cols()
@@ -399,8 +400,8 @@ scrape_espn_team <- function(leagueID = 299999, week = 1, season = 2020) {
                           ~ team_roster[[.x]][["playerPoolEntry"]][["player"]] %>%
                             as_tibble() %>%
                             select(playerID = id, player = fullName,
-                                   position = defaultPositionId, proTeamId,
-                                   injured, injury_status = injuryStatus)),
+                                   position = defaultPositionId, proTeamId)),#,
+                                   #injured, injury_status = injuryStatus)),
         roster = map(team_n,
                      ~team_roster[[.x]][["lineupSlotId"]]))
 
@@ -464,7 +465,7 @@ scrape_espn_team <- function(leagueID = 299999, week = 1, season = 2020) {
            season = as.integer(season)) %>%
     select(league, leagueID, season, week = scoringPeriodId,
            teamID, score, playerID:position,
-           roster, proj_pts, act_pts, injured, injury_status)
+           roster, proj_pts, act_pts)#, injured, injury_status)
 }
 
 scrape_yahoo_team <- function(leagueID, week, season, teamID) {
