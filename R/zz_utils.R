@@ -11,90 +11,45 @@
 NULL
 
 
-weight_games <- function(x, reg_games = 6) {
+weight_games <- function(x, alpha = 0.1) {
 
-  # Slightly penalize outliers
-  bottom_outlier <- quantile(x, 0.25) - IQR(x) * 1.25
-  top_outlier <- quantile(x, 0.75) + IQR(x) * 1.25
-  outlier_weights <- ifelse(x < bottom_outlier, 1 - (bottom_outlier - x)/bottom_outlier,
-                            ifelse(x > top_outlier, 1 - (x - top_outlier)/top_outlier, 1))
+  weekly_weights <- replicate(length(x), NA)
+  uniform_weights <- 1
 
-  # Add extra term for regression to mean weeks
-  if (length(x) < reg_games) {outlier_weights <- c(outlier_weights, 1)}
+  if(length(x) %% 2 == 0) { #even
 
-  # Make sure no weight is negative due to extreme score
-  outlier_weights <- ifelse(outlier_weights <= 0, 0.1, outlier_weights)
+    index <- length(x) / 2
+    for (i in 1:length(x)) {
 
+      weekly_weights[i] <- ifelse(i <= index,
+                                  uniform_weights - ((index + 1) - i) * alpha,
+                                  uniform_weights + (i - (index )) * alpha)
 
-  if (length(x) < reg_games) {
-
-    weekly_weights <- replicate(length(x), NA)
-    uniform_weights <- rep(((10 - reg_games + length(x))/10)/length(x), length(x))
-    if(length(x) %% 2 == 0) { #even
-      index <- length(x)/2
-      for (i in 1:length(x)) {
-        weekly_weights[i] <- ifelse(i <= index, uniform_weights - ((index+1)-i)* .01, uniform_weights + (i-(index))* .01) # fix
-      }
-    } else { #odd
-      index <- (length(x)+1)/2
-      for (i in 1:length(x)) {
-        if (i != index) {
-          weekly_weights[i] <- ifelse(i < index, uniform_weights - (index-i)*.01, uniform_weights + (i-index)*.01)
-        } else weekly_weights[i] <- uniform_weights[i]
-      }
     }
 
-    weekly_weights <- c(weekly_weights, (reg_games - length(x))/10)
-    weekly_weights <- ifelse(weekly_weights < 0, 0, weekly_weights)
+  } else { #odd
+    index <- (length(x) + 1) / 2
 
-  } else {
-    # Give more weight to recent games
-    # Extra weight increases throughout season
-    weekly_weights <- replicate(length(x), NA)
-    uniform_weights <- 1/length(x)
-    if(length(x) %% 2 == 0) { #even
-      index <- length(x)/2
-      for (i in 1:length(x)) {
-        weekly_weights[i] <- ifelse(i <= index, uniform_weights - ((index+1)-i)* .01, uniform_weights + (i-(index))* .01) # fix
-      }
-    } else { #odd
-      index <- (length(x)+1)/2
-      for (i in 1:length(x)) {
-        if (i != index) {
-          weekly_weights[i] <- ifelse(i < index, uniform_weights - (index-i)*.01, uniform_weights + (i-index)*.01)
-        } else {weekly_weights[i] <- uniform_weights}
+    for (i in 1:length(x)) {
+
+      if (i != index) {
+
+        weekly_weights[i] <- ifelse(i < index,
+                                    uniform_weights - (index - i) * alpha,
+                                    uniform_weights + (i - index) * alpha)
+
+      } else {
+
+        weekly_weights[i] <- uniform_weights
+
       }
     }
   }
 
-  combined_weights <- outlier_weights * weekly_weights
-  combined_weights <- combined_weights/sum(combined_weights)
+  weekly_weights <- if_else(weekly_weights < 0, 0, weekly_weights)
 
-  ifelse(combined_weights < 0, 0, combined_weights)
-}
-
-weighted_sd <- function (x, weights = NULL, normwt = FALSE,
-                         na.rm = TRUE, method = c("unbiased", "ML")) {
-  method <- match.arg(method)
-  if (!length(weights)) {
-    if (na.rm)
-      x <- x[!is.na(x)]
-    return(sd(x))
-  }
-  if (na.rm) {
-    s <- !is.na(x + weights)
-    x <- x[s]
-    weights <- weights[s]
-  }
-  if (normwt)
-    weights <- weights * length(x)/sum(weights)
-  if (normwt || method == "ML")
-    return(as.numeric(sqrt(stats::cov.wt(cbind(x), weights, method = method)$cov)))
-  sw <- sum(weights)
-  if (sw <= 1)
-    warning("only one effective observation; variance estimate undefined")
-  xbar <- sum(weights * x)/sw
-  sqrt(sum(weights * ((x - xbar)^2))/(sw - 1))
+  tibble(week = x,
+         weight = weekly_weights)
 }
 
 prob_to_odds <- function(x) {
