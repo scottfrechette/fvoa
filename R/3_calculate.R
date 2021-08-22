@@ -38,12 +38,6 @@ calculate_quadrants <- function(schedule, scores) {
 
   num_games <- max(scores$week)
 
-  if("team" %in% names(schedule) | "teamID" %in% names(schedule)) {
-    schedule <- spread_schedule(schedule)
-  }
-
-  schedule <- doublewide_schedule(schedule)
-
   team_col <- names(select(scores, starts_with("team")))
   scores <- select(scores, week, team = starts_with("team"), score)
 
@@ -75,10 +69,6 @@ calculate_stats <- function(schedule, scores, league = "Yahoo") {
   if("type" %in% names(scores)) {
     scores <- scores %>%
       filter(type == "act")
-  }
-
-  if("team" %in% names(schedule)) {
-    schedule <- spread_schedule(schedule)
   }
 
   team_col <- names(select(scores, starts_with("team")))
@@ -135,12 +125,6 @@ calculate_fvoa <- function(draws) {
 
 calculate_strength_schedule <- function(schedule, fvoa) {
 
-  if("team" %in% names(schedule) | "teamID" %in% schedule) {
-    schedule <- spread_schedule(schedule)
-  }
-
-  schedule <- doublewide_schedule(schedule)
-
   team_col <- names(select(scores, starts_with("team")))
   scores <- select(scores, week, team = starts_with("team"), score)
 
@@ -154,12 +138,6 @@ calculate_strength_schedule <- function(schedule, fvoa) {
 }
 
 calculate_colley <- function(schedule, scores) {
-
-  if("team" %in% names(schedule) | "teamID" %in% schedule) {
-    schedule <- spread_schedule(schedule)
-  }
-
-  schedule <- doublewide_schedule(schedule)
 
   team_col <- names(select(scores, starts_with("team")))
   scores <- select(scores, week, team = starts_with("team"), score)

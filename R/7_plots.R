@@ -148,14 +148,6 @@ plot_playoff_leverage <- function(scores, schedule, playoff_leverage_df) {
 
   sims <- max(playoff_leverage_df$sim)
 
-  if("team" %in% names(schedule)) {
-    schedule <- spread_schedule(schedule)
-  }
-
-  if(unique(count(schedule, week)$n) != n_distinct(schedule$team1)) {
-    schedule <- doublewide_schedule(schedule)
-  }
-
   schedule %>%
     filter(week == max(scores$week) + 1) %>%
     mutate(tmp = list(playoff_leverage_df)) %>%
@@ -349,8 +341,6 @@ plot_exp_wpct <- function(scores, schedule) {
 
   schedule %>%
     filter(week < 2) %>%
-    spread_schedule() %>%
-    doublewide_schedule() %>%
     mutate_at(vars(team1, team2), as.character) %>%
     inner_join(scores %>%
                  rename(t1_points = score),

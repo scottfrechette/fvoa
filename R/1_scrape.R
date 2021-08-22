@@ -15,7 +15,7 @@ scrape_schedule <- function(league, leagueID,
 
     map_df(1:17, ~ scrape_yahoo_schedule(leagueID, season, .x)) %>%
       mutate(season = as.integer(season)) %>%
-      select(league, leagueID, season, everything())
+      select(league, leagueID, season, week, gameID, team1, team2)
 
   } else if (league == "espn") {
 
@@ -197,6 +197,231 @@ extract_projections <- function(team) {
 
 }
 
+scrape_player_ids <- function(season) {
+
+  httr::GET(str_glue("https://api.myfantasyleague.com/{season}/export?TYPE=players&L=&APIKEY=&DETAILS=1&SINCE=&PLAYERS=&JSON=1")) %>%
+    httr::content() %>%
+    `[[`("players") %>%
+    `[[`("player") %>%
+    purrr::map(tibble::as_tibble) %>%
+    dplyr::bind_rows() %>%
+    dplyr::filter(position %in% c("QB", "RB", "WR", "TE", "PK",
+                                  "Def", "DE", "DT", "LB", "CB", "S")) %>%
+    tidyr::extract(name, c("last_name", "first_name"), "(.+),\\s(.+)") %>%
+    tidyr::unite(player, first_name, last_name, sep = " ") %>%
+    dplyr::mutate(position = dplyr::recode(position, Def = "DST", PK = "K"),
+                  birthdate = as.Date(as.POSIXct(as.numeric(birthdate),
+                                                 origin = "1970-01-01")),
+                  age = as.integer(lubridate::year(Sys.time()) - lubridate::year(birthdate)),
+                  exp = 2020 - as.integer(draft_year)) %>%
+    dplyr::select(id, player, position, team, exp)
+
+}
+
+valid_teamID <- function(leagueID, teamID) {
+
+  url <- paste0("https://football.fantasysports.yahoo.com/f1/",
+                leagueID, "/teams")
+
+  page <- xml2::read_html(url)
+
+  exists <- page %>%
+    rvest::html_nodes(str_glue(".team-{teamID}")) %>%
+    length() == 1
+
+  if(exists) {
+
+    page %>%
+      rvest::html_nodes(str_glue(".team-{teamID}")) %>%
+      rvest::html_text() %>%
+      as_tibble() %>%
+      mutate(Team = word(value, sep = "-")) %>%
+      pull(Team)
+
+  } else {
+    NA
+  }
+
+}
+
+yahoo_teamIDs <- function(leagueID, teamID = 1:20) {
+
+  tibble(teamID) %>%
+    mutate(team = map(teamID, ~ valid_teamID(leagueID, .x))) %>%
+    unnest(team) %>%
+    filter(!is.na(team))
+
+}
+
+scrape_yahoo_schedule <- function(leagueID, season, week) {
+
+  url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID, "?matchup_week=", week)
+
+  page <- xml2::read_html(url)
+
+  schedule <- page %>%
+    rvest::html_nodes("#matchupweek .F-link") %>%
+    rvest::html_attr('href') %>%
+    str_extract("\\d*$") %>%
+    as_tibble() %>%
+    mutate(week = week,
+           gameID = ceiling(row_number()/2)) %>%
+    select(week, gameID, team = value)
+
+  schedule <- schedule %>%
+    group_by(week, gameID) %>%
+    summarize(tmp = paste(team, collapse = ","),
+              .groups = "drop") %>%
+    separate(tmp, into = paste0("team", 1:2), sep = ",")
+
+  schedule_tmp <- schedule
+  schedule_rev <- schedule_tmp %>%
+    select(week, gameID, team1 = team2, team2 = team1)
+
+  bind_rows(schedule_tmp, schedule_rev) %>%
+    arrange(week, gameID, team1) %>%
+    mutate(league = 'yahoo',
+           leagueID = leagueID,
+           season = season,
+           .before = 1) %>%
+    mutate(across(c(-league), .fns = as.integer))
+
+}
+
+scrape_yahoo_team <- function(leagueID, week, season, teamID) {
+
+  team_url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID,
+                     "/matchup?week=", week, "&mid1=", teamID)
+
+  page <- xml2::read_html(team_url)
+
+  starters <- page %>%
+    rvest::html_nodes("#statTable1") %>%
+    rvest::html_table() %>%
+    .[[1]] %>%
+    select(1:5) %>%
+    as_tibble() %>%
+    filter(Pos != "Total") %>%
+    mutate(`Fan Pts` = as.numeric(`Fan Pts`)) %>%
+    replace_na(list(`Fan Pts` = 0))
+
+  bench <- page %>%
+    rvest::html_nodes("#statTable2") %>%
+    rvest::html_table(fill = T) %>%
+    .[[1]] %>%
+    select(1:5) %>%
+    as_tibble() %>%
+    filter(Pos != "Total") %>%
+    mutate(Proj = as.numeric(Proj),
+           `Fan Pts` = as.numeric(`Fan Pts`)) %>%
+    replace_na(list(`Fan Pts` = 0))
+
+  bind_rows(starters,
+            bench) %>%
+    rename(act_pts = `Fan Pts`,
+           proj_pts = Proj,
+           roster = Pos) %>%
+    separate(Player, c("notes", "player"), "Notes\\s+|Note\\s+") %>%
+    separate(player, c("player", "result"), "Final|Bye") %>%
+    separate(player, c("player", "position"), " - ") %>%
+    mutate(league = 'yahoo',
+           leagueID = as.integer(leagueID),
+           season = season,
+           teamID = teamID,
+           week = week,
+           player = str_replace(player, "\\s[:alpha:]+$", ""),
+           position = str_extract(position, "[:alpha:]+"),
+           score = sum(starters$`Fan Pts`, na.rm = T),
+           across(c(season, week, teamID), as.integer)) %>%
+    drop_na(player) %>%
+    select(league, leagueID, season, week, teamID, score,
+           player, position, roster, proj_pts, act_pts)
+
+}
+
+yahoo_winprob <- function(week, leagueID, teamID) {
+
+  url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID,
+                "/matchup?week=", week, "&mid1=", teamID)
+
+  page <- xml2::read_html(url)
+
+  page %>%
+    rvest::html_nodes(".Pend-med") %>%
+    rvest::html_text() %>%
+    .[[2]]
+
+}
+
+scrape_yahoo_players <- function(leagueID, week, position, page) {
+
+  url <- str_glue("https://football.fantasysports.yahoo.com/f1/{leagueID}/players?status=ALL&pos={position}&cut_type=9&stat1=S_PW_{week}&myteam=0&sort=AR&sdir=1&count={page}")
+
+  page <- xml2::read_html(url)
+
+  if(position %in% c("K", "DEF", "DL", "DB")) {
+
+    tibble(player = page %>%
+             rvest::html_nodes("table") %>%
+             .[[2]] %>%
+             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
+             rvest::html_text(),
+           playerID = page %>%
+             rvest::html_nodes("table") %>%
+             .[[2]] %>%
+             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
+             rvest::html_attr("href") %>%
+             str_extract("\\d*$"),
+           teamID = page %>%
+             rvest::html_nodes("table") %>%
+             .[[2]] %>%
+             rvest::html_nodes(xpath = '//*[@class="Ta-start Nowrap Bdrend"]') %>%
+             map(yahoo_player_team) %>%
+             unlist())
+
+  } else {
+
+    tibble(player = page %>%
+             rvest::html_nodes("table") %>%
+             .[[2]] %>%
+             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
+             rvest::html_text(),
+           playerID = page %>%
+             rvest::html_nodes("table") %>%
+             .[[2]] %>%
+             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
+             rvest::html_attr("href") %>%
+             str_extract("\\d*$"),
+           teamID = page %>%
+             rvest::html_nodes("table") %>%
+             .[[2]] %>%
+             rvest::html_nodes(xpath = '//*[@class="Alt Ta-start Nowrap Bdrend"]') %>%
+             map(yahoo_player_team) %>%
+             unlist())
+
+  }
+
+}
+
+yahoo_player_team <- function(x) {
+
+  team <- rvest::html_text(x)
+
+  if (str_detect(team, "^[A-Z] [()]|^FA$")) {
+
+    return("0")
+
+  } else {
+
+    x %>%
+      rvest::html_nodes("a") %>%
+      rvest::html_attr('href') %>%
+      str_extract("\\d*$")
+
+  }
+
+}
+
 ffespn_api <- function(path, query = NULL, headers = NULL) {
   # url
   baseurl <- "http://fantasy.espn.com/"
@@ -236,72 +461,11 @@ ffespn_api <- function(path, query = NULL, headers = NULL) {
 }
 
 
-valid_teamID <- function(leagueID, teamID) {
+tidy_espn_cols <- function(df) {
 
-  url <- paste0("https://football.fantasysports.yahoo.com/f1/",
-                leagueID, "/teams")
-
-  page <- xml2::read_html(url)
-
-  exists <- page %>%
-    rvest::html_nodes(str_glue(".team-{teamID}")) %>%
-    length() == 1
-
-  if(exists) {
-
-    page %>%
-      rvest::html_nodes(str_glue(".team-{teamID}")) %>%
-      rvest::html_text() %>%
-      as_tibble() %>%
-      mutate(Team = word(value, sep = "-")) %>%
-      pull(Team)
-
-  } else {
-    NA
-  }
-
-}
-
-yahoo_teamIDs <- function(leagueID, teamID = 1:20) {
-
-  tibble(teamID) %>%
-    mutate(team = map(teamID, ~ valid_teamID(leagueID, .x))) %>%
-    unnest(team) %>%
-    filter(!is.na(team))
-
-}
-
-espn_teamIDs <- function(leagueID, season) {
-  url <- "http://fantasy.espn.com/apis/v3/games/ffl/seasons/2020/segments/0/leagues/299999?view=settings"
-
-  jsonlite::fromJSON(url) %>%
-    .$teams %>%
-    tidy_espn_cols() %>%
-    unite(team, location, nickname, sep = " ") %>%
-    select(teamID = id, team)
-}
-
-scrape_yahoo_schedule <- function(leagueID, season, week) {
-
-  url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID, "?matchup_week=", week)
-
-  page <- xml2::read_html(url)
-
-  page %>%
-    rvest::html_nodes("#matchupweek .F-link") %>%
-    rvest::html_attr('href') %>%
-    str_extract("\\d*$") %>%
-    as_tibble() %>%
-    mutate(week = week,
-           gameID = ceiling(row_number()/2)) %>%
-    select(week, gameID, team = value) %>%
-    spread_schedule() %>%
-    mutate(league = 'yahoo',
-           leagueID = leagueID,
-           season = season) %>%
-    mutate(across(c(-league), .fns = as.integer)) %>%
-    select(league, leagueID, season, week,
-           gameID, team1, team2)
+  df %>%
+    map_if(is.data.frame, list) %>%
+    as_tibble()
 
 }
 
@@ -445,92 +609,6 @@ scrape_espn_team <- function(leagueID = 299999, week = 1, season = 2020) {
            roster, proj_pts, act_pts, injured, injury_status)
 }
 
-scrape_yahoo_team <- function(leagueID, week, season, teamID) {
-
-  team_url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID,
-                     "/matchup?week=", week, "&mid1=", teamID)
-
-  page <- xml2::read_html(team_url)
-
-  starters <- page %>%
-    rvest::html_nodes("#statTable1") %>%
-    rvest::html_table() %>%
-    .[[1]] %>%
-    select(1:5) %>%
-    as_tibble() %>%
-    filter(Pos != "Total") %>%
-    mutate(`Fan Pts` = as.numeric(`Fan Pts`)) %>%
-    replace_na(list(`Fan Pts` = 0))
-
-  bench <- page %>%
-    rvest::html_nodes("#statTable2") %>%
-    rvest::html_table(fill = T) %>%
-    .[[1]] %>%
-    select(1:5) %>%
-    as_tibble() %>%
-    filter(Pos != "Total") %>%
-    mutate(Proj = as.numeric(Proj),
-           `Fan Pts` = as.numeric(`Fan Pts`)) %>%
-    replace_na(list(`Fan Pts` = 0))
-
-  bind_rows(starters,
-            bench) %>%
-    rename(act_pts = `Fan Pts`,
-           proj_pts = Proj,
-           roster = Pos) %>%
-    separate(Player, c("notes", "player"), "Notes\\s+|Note\\s+") %>%
-    separate(player, c("player", "result"), "Final|Bye") %>%
-    separate(player, c("player", "position"), " - ") %>%
-    mutate(league = 'yahoo',
-           leagueID = as.integer(leagueID),
-           season = season,
-           teamID = teamID,
-           week = week,
-           player = str_replace(player, "\\s[:alpha:]+$", ""),
-           position = str_extract(position, "[:alpha:]+"),
-           score = sum(starters$`Fan Pts`, na.rm = T),
-           across(c(season, week, teamID), as.integer)) %>%
-    drop_na(player) %>%
-    select(league, leagueID, season, week, teamID, score,
-           player, position, roster, proj_pts, act_pts)
-
-}
-
-yahoo_winprob <- function(week, leagueID, teamID) {
-
-  url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID,
-                "/matchup?week=", week, "&mid1=", teamID)
-
-  page <- xml2::read_html(url)
-
-  page %>%
-    rvest::html_nodes(".Pend-med") %>%
-    rvest::html_text() %>%
-    .[[2]]
-
-}
-
-scrape_player_ids <- function(season) {
-
-  httr::GET(str_glue("https://api.myfantasyleague.com/{season}/export?TYPE=players&L=&APIKEY=&DETAILS=1&SINCE=&PLAYERS=&JSON=1")) %>%
-    httr::content() %>%
-    `[[`("players") %>%
-    `[[`("player") %>%
-    purrr::map(tibble::as_tibble) %>%
-    dplyr::bind_rows() %>%
-    dplyr::filter(position %in% c("QB", "RB", "WR", "TE", "PK",
-                                  "Def", "DE", "DT", "LB", "CB", "S")) %>%
-    tidyr::extract(name, c("last_name", "first_name"), "(.+),\\s(.+)") %>%
-    tidyr::unite(player, first_name, last_name, sep = " ") %>%
-    dplyr::mutate(position = dplyr::recode(position, Def = "DST", PK = "K"),
-                  birthdate = as.Date(as.POSIXct(as.numeric(birthdate),
-                                                 origin = "1970-01-01")),
-                  age = as.integer(lubridate::year(Sys.time()) - lubridate::year(birthdate)),
-                  exp = 2020 - as.integer(draft_year)) %>%
-    dplyr::select(id, player, position, team, exp)
-
-}
-
 scrape_espn_players <- function(leagueID = 299999, season = 2020, week,
                                 pos = slot_names,
                                 projections = TRUE) {
@@ -580,113 +658,41 @@ scrape_espn_players <- function(leagueID = 299999, season = 2020, week,
   tidy_projections(x)
 }
 
-scrape_yahoo_players <- function(leagueID, week, position, page) {
 
-  url <- str_glue("https://football.fantasysports.yahoo.com/f1/{leagueID}/players?status=ALL&pos={position}&cut_type=9&stat1=S_PW_{week}&myteam=0&sort=AR&sdir=1&count={page}")
+scrape_espn_players1 <- function(leagueID, season, week) {
 
-  page <- xml2::read_html(url)
+  conn <- ffscrapr::espn_connect(season = season, league_id = leagueID)
 
-  if(position %in% c("K", "DEF", "DL", "DB")) {
+  players = list(
+    filterSlotIds = list(value = 0L), # QB
+    filterStatsForSourceIds = list(value = 1L), # 0 = actual, 1 = projected
+    offset = jsonlite::unbox(0)
+  )
 
-    tibble(player = page %>%
-             rvest::html_nodes("table") %>%
-             .[[2]] %>%
-             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
-             rvest::html_text(),
-           playerID = page %>%
-             rvest::html_nodes("table") %>%
-             .[[2]] %>%
-             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
-             rvest::html_attr("href") %>%
-             str_extract("\\d*$"),
-           teamID = page %>%
-             rvest::html_nodes("table") %>%
-             .[[2]] %>%
-             rvest::html_nodes(xpath = '//*[@class="Ta-start Nowrap Bdrend"]') %>%
-             map(yahoo_player_team) %>%
-             unlist())
-
+  if (week == 0) {
+    players$filterStatsForExternalIds = list(value = season)
   } else {
-
-    tibble(player = page %>%
-             rvest::html_nodes("table") %>%
-             .[[2]] %>%
-             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
-             rvest::html_text(),
-           playerID = page %>%
-             rvest::html_nodes("table") %>%
-             .[[2]] %>%
-             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
-             rvest::html_attr("href") %>%
-             str_extract("\\d*$"),
-           teamID = page %>%
-             rvest::html_nodes("table") %>%
-             .[[2]] %>%
-             rvest::html_nodes(xpath = '//*[@class="Alt Ta-start Nowrap Bdrend"]') %>%
-             map(yahoo_player_team) %>%
-             unlist())
-
+    players$filterStatsForSplitTypeIds = list(value = week)
   }
 
-}
+  player_scores <- ffscrapr::espn_getendpoint(conn, view = "kona_player_info",
+                                              x_fantasy_filter = jsonlite::toJSON(list("players" = players)))
 
-yahoo_player_team <- function(x) {
-
-  team <- rvest::html_text(x)
-
-  if (str_detect(team, "^[A-Z] [()]|^FA$")) {
-
-    return("0")
-
-  } else {
-
-    x %>%
-      rvest::html_nodes("a") %>%
-      rvest::html_attr('href') %>%
-      str_extract("\\d*$")
-
-  }
-
-}
-
-
-tidy_espn_cols <- function(df) {
-
-  df %>%
-    map_if(is.data.frame, list) %>%
-    as_tibble()
+  player_scores$content %>%
+    as_tibble() %>%
+    select(players) %>%
+    hoist("players", "id", "onTeamId", "player", "ratings", "status", "rosterLocked",
+          "tradeLocked", "keeperValue", "keeperValueFuture", "lineupLocked") %>%
+    select(-players) %>%
+    unnest("ratings") %>%
+    hoist("ratings", "positionalRanking", "totalRanking", "totalRating") %>%
+    hoist("player", "fullName", "active", "droppable", "injured", "injuryStatus",
+          "proTeamId", "ownership", "stats", "eligibleSlots") %>%
+    select(-"player") %>%
+    hoist("ownership", "auctionValueAverage", "averageDraftPosition",
+          "percentOwner", "percentChanged", "percentStarted") %>%
+    select(-"ownership")
 
 }
 
-spread_schedule <- function(schedule, week = week,
-                            gameID = gameID) {
 
-  long_to_wide(schedule, team, week, gameID)
-
-}
-
-gather_schedule <- function(schedule, teamID = teamID,
-                            team1 = team1, team2 = team2) {
-
-  wide_to_long(schedule, teamID, team1, team2)
-
-}
-
-doublewide_schedule <- function(schedule) {
-
-  if("teamID" %in% names(schedule)) {
-
-    schedule <- spread_schedule(schedule)
-
-  }
-
-  other_cols <- setdiff(names(schedule), c("team1", "team2"))
-
-  schedule_tmp <- schedule %>%
-    mutate_if(is.factor, as.character)
-  schedule_rev <- schedule_tmp %>%
-    select(other_cols, team1 = team2, team2 = team1)
-  bind_rows(schedule_tmp, schedule_rev) %>%
-    arrange(week, team1)
-
-}

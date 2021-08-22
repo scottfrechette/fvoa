@@ -11,47 +11,6 @@
 NULL
 
 
-weight_games <- function(x, alpha = 0.1) {
-
-  weekly_weights <- replicate(length(x), NA)
-  uniform_weights <- 1
-
-  if(length(x) %% 2 == 0) { #even
-
-    index <- length(x) / 2
-    for (i in 1:length(x)) {
-
-      weekly_weights[i] <- ifelse(i <= index,
-                                  uniform_weights - ((index + 1) - i) * alpha,
-                                  uniform_weights + (i - (index )) * alpha)
-
-    }
-
-  } else { #odd
-    index <- (length(x) + 1) / 2
-
-    for (i in 1:length(x)) {
-
-      if (i != index) {
-
-        weekly_weights[i] <- ifelse(i < index,
-                                    uniform_weights - (index - i) * alpha,
-                                    uniform_weights + (i - index) * alpha)
-
-      } else {
-
-        weekly_weights[i] <- uniform_weights
-
-      }
-    }
-  }
-
-  weekly_weights <- if_else(weekly_weights < 0, 0, weekly_weights)
-
-  tibble(week = x,
-         weight = weekly_weights)
-}
-
 prob_to_odds <- function(x) {
   # convert decimal to whole number
   if (x < 1) {
@@ -115,36 +74,6 @@ count_to_pct <- function(df, ..., col = n) {
     ungroup()
 
 } # convert count to percent (can group)
-
-wide_to_long <- function(df, new, ...) {
-
-  new_name = enquo(new) %>% quo_name()
-  old_cols = quos(...)
-
-  df %>%
-    unite(tmp, !!!old_cols) %>%
-    mutate(tmp = map(tmp, strsplit, "_")) %>%
-    unnest(tmp) %>%
-    unnest(tmp) %>%
-    rename(!!new_name := tmp)
-
-}
-
-long_to_wide <- function(df, old, ..., sep = ",")  {
-
-  old_col = enquo(old)
-  new_col = quo_name(old_col)
-  grouping = quos(...)
-
-
-  df  %>%
-    group_by(!!!grouping) %>%
-    summarise(tmp = paste(!!old_col, collapse = sep),
-              .groups = "drop") %>%
-    ungroup() %>%
-    separate(tmp, into = paste0(new_col, 1:length(grouping)), sep = sep)
-
-}
 
 select_rankings <- function(df, ...) {
   columns <- quos(...)

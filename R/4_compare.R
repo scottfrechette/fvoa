@@ -2,23 +2,20 @@
 # Main Functions ----------------------------------------------------------
 
 #' @export
-compare_teams <- function(scores,
-                          team1,
-                          team2,
-                          .fun = simulate_score,
+compare_teams <- function(model, team1, team2,
                           .output = c("prob", "odds", "spread"),
-                          .verbose = FALSE,
-                          ...) {
-
-  set.seed(42)
+                          .verbose = FALSE) {
 
   .output <- match.arg(.output)
 
-  t1_sim <- .fun(scores, team1, ...)
-
-  t2_sim <- .fun(scores, team2, ...)
-
-  sim <- t1_sim - t2_sim
+  sim <- tibble(team = c(team1, team2)) %>%
+    tidybayes::add_predicted_draws(mdl, seed = 42) %>%
+    ungroup() %>%
+    select(team, sim = .draw, score = .prediction) %>%
+    spread(team, score) %>%
+    rename(team1 = all_of(team1), team2 = all_of(team2)) %>%
+    mutate(diff = team1 - team2) %>%
+    pull(diff)
 
   if(.output == "prob") {
 
@@ -36,7 +33,7 @@ compare_teams <- function(scores,
       t2normal <- t2wins - t2squeak - t2blowout
 
       tibble(Winner = c(team1, team1, team1, "Tie", team2, team2, team2),
-             Type = c("Blowout", "Normal", "Squeaker", "Tie", "Squeaker", "Normal", "Blowout"),
+             Type = c("Blowout", "Comfortable", "Squeaker", "Tie", "Squeaker", "Comfortable", "Blowout"),
              MarginVictory = c("20+ points", "5-20", "<5 points", "-", "<5 points", "5-20", "20+ points"),
              PctChance = c(t1blowout, t1normal, t1squeak, tie, t2squeak, t2normal, t2blowout))
 
@@ -68,69 +65,44 @@ compare_teams <- function(scores,
 }
 
 #' @export
-compare_league <- function(scores,
-                           .fun = simulate_score,
-                           ...) {
+compare_league <- function(scores, model) {
 
-  scores <- extract_scores(scores)
+  team_sims <- distinct(scores, team) %>%
+    tidybayes::add_predicted_draws(mdl, seed = 42) %>%
+    ungroup() %>%
+    select(team, score = .prediction) %>%
+    nest(data = -team)
 
-  teams <- unique(pull(select(scores, starts_with("team"))))
-
-  set.seed(42)
-
-  team_scores <- tibble(team1 = teams) %>%
-    mutate(score1 = map(team1,
-                        .fun,
-                        scores = scores,
-                        ...))
-
-  crossing(team_scores,
-           rename(team_scores, team2 = team1, score2 = score1)) %>%
+  crossing(rename(team_sims, team1 = team, data1 = data),
+           rename(team_sims, team2 = team, data2 = data)) %>%
     filter(team1 != team2) %>%
-    mutate(sim = map2(score1, score2, ~ .x - .y),
-           wp = map_dbl(sim, convert_wp),
+    mutate(sims = map2(data1, data2, ~.x - .y),
+           wp = map_dbl(sims, ~mean(.x$score > 0)),
            odds = map_chr(wp, prob_to_odds),
-           spread = map_chr(sim, convert_spread)) %>%
-    select(starts_with("team"), wp:spread)
+           spread = map_dbl(sims, ~mean(.x$score))) %>%
+    select(team1, team2, wp, odds, spread)
 
 }
 
 #' @export
 compare_current_matchups <- function(scores,
                                      schedule,
-                                     current_week,
-                                     win_prob = NULL,
-                                     .fun = simulate_score,
-                                     ...) {
-
-  set.seed(42)
-
-  scores <- select(scores, week, team = starts_with("team"), score)
-
-  if("team" %in% names(schedule) | "teamID" %in% names(schedule)) {
-    schedule <- spread_schedule(schedule)
-  }
-
-  schedule <- doublewide_schedule(schedule)
+                                     model,
+                                     win_prob = NULL) {
 
   cutoff <- length(unique(scores$team)) / 2
 
   current_matchups <- schedule %>%
-    filter(week == current_week) %>%
-    mutate_if(is.factor, as.character) %>%
+    filter(week == max(scores$week) + 1) %>%
     mutate(fvoa_wp = map2_dbl(team1, team2,
-                              compare_teams,
-                              scores = scores,
-                              ...)) %>%
+                              ~compare_teams(model, team1 = .x, team2 = .y))) %>%
     arrange(-fvoa_wp) %>%
     head(cutoff) %>%
     mutate(Line = map_chr(fvoa_wp, prob_to_odds),
            fvoa_wp = round(fvoa_wp/100, 2) %>% format_pct,
            Spread = map2_chr(team1, team2,
-                             compare_teams,
-                             scores = scores,
-                             .output = "spread",
-                             ...)) %>%
+                             ~compare_teams(model, team1 = .x, team2 = .y,
+                                            .output = "spread"))) %>%
     select(Winner = team1,
            Loser = team2,
            FVOA = fvoa_wp,
@@ -152,39 +124,21 @@ compare_current_matchups <- function(scores,
 }
 
 #' @export
-compare_playoff_teams <- function(scores,
-                                  seed1, seed2, seed3, seed4,
-                                  .output = "prob",
-                                  .fun = simulate_score,
-                                  ...) {
-
-  set.seed(42)
+compare_playoff_teams <- function(model, seed1, seed2, seed3, seed4) {
 
   # Simulate each possible matchup
-  t1r1 <- compare_teams(scores, seed1, seed4,
-                        .fun = .fun, .reps = 1e6)/100
-  t2r1 <- compare_teams(scores, seed2, seed3,
-                        .fun = .fun, .reps = 1e6)/100
-  t3r1 <- compare_teams(scores, seed3, seed2,
-                        .fun = .fun, .reps = 1e6)/100
-  t4r1 <- compare_teams(scores, seed4, seed1,
-                        .fun = .fun, .reps = 1e6)/100
-  t12r2 <- compare_teams(scores, seed1, seed2,
-                         .fun = .fun, .reps = 1e6)/100
-  t13r2 <- compare_teams(scores, seed1, seed3,
-                         .fun = .fun, .reps = 1e6)/100
-  t21r2 <- compare_teams(scores, seed2, seed1,
-                         .fun = .fun, .reps = 1e6)/100
-  t24r2 <- compare_teams(scores, seed2, seed4,
-                         .fun = .fun, .reps = 1e6)/100
-  t31r2 <- compare_teams(scores, seed3, seed1,
-                         .fun = .fun, .reps = 1e6)/100
-  t34r2 <- compare_teams(scores, seed3, seed4,
-                         .fun = .fun, .reps = 1e6)/100
-  t42r2 <- compare_teams(scores, seed4, seed2,
-                         .fun = .fun, .reps = 1e6)/100
-  t43r2 <- compare_teams(scores, seed4, seed3,
-                         .fun = .fun, .reps = 1e6)/100
+  t1r1 <- compare_teams(model, seed1, seed4)/100
+  t2r1 <- compare_teams(model, seed2, seed3)/100
+  t3r1 <- compare_teams(model, seed3, seed2)/100
+  t4r1 <- compare_teams(model, seed4, seed1)/100
+  t12r2 <- compare_teams(model, seed1, seed2)/100
+  t13r2 <- compare_teams(model, seed1, seed3)/100
+  t21r2 <- compare_teams(model, seed2, seed1)/100
+  t24r2 <- compare_teams(model, seed2, seed4)/100
+  t31r2 <- compare_teams(model, seed3, seed1)/100
+  t34r2 <- compare_teams(model, seed3, seed4)/100
+  t42r2 <- compare_teams(model, seed4, seed2)/100
+  t43r2 <- compare_teams(model, seed4, seed3)/100
 
   # Calculate chances of each team winning both rounds
   t1wins <- round(t1r1 * ((t2r1 * t12r2) + (t3r1 * t13r2)), 4) * 100
@@ -213,29 +167,22 @@ compare_playoff_teams <- function(scores,
          Odds = c(t1odds, t2odds, t3odds, t4odds),
          BettingLine = as.factor(c(t1Amodds, t2Amodds, t3Amodds, t4Amodds))) %>%
     arrange(-Percent) %>%
-    mutate(Percent = scales::percent(Percent))
+    mutate(Percent = scales::percent(Percent, accuracy = 1))
 }
 
 
 # Helper Functions --------------------------------------------------------
 
-convert_wp <- function(sim) {
-
-  round(pnorm(0, mean(sim), sd(sim), lower.tail=FALSE) * 100 -
-          round(dnorm(0, mean(sim), sd(sim)) * 100, 2)/2, 2)
-
-}
-
-convert_spread <- function(sim) {
-
-  spread <- -mean(sim)
-  spread <- round(spread * 2) / 2
-  spread <- if_else(spread > 0, paste0("+", spread),
-                    if_else(spread < 0, paste(spread), paste(0)))
-
-  return(spread)
-
-}
+# convert_spread <- function(sim) {
+#
+#   spread <- -mean(sim)
+#   spread <- round(spread * 2) / 2
+#   spread <- if_else(spread > 0, paste0("+", spread),
+#                     if_else(spread < 0, paste(spread), paste(0)))
+#
+#   return(spread)
+#
+# }
 
 #' @export
 spread_league <- function(league_comparison,

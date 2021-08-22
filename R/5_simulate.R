@@ -1,320 +1,77 @@
+#' @export
+simulate_season_scores <- function(scores, schedule, model,
+                                   change_prob = 0.1,
+                                   score_adj = 15) {
 
-simulate_season_scores1 <- function(scores, schedule, model) {
-
-  if("team" %in% names(schedule) | "teamID" %in% schedule) {
-    schedule <- spread_schedule(schedule)
-  }
-
-  schedule <- doublewide_schedule(schedule)
+  set.seed(42)
 
   sims <- schedule %>%
     distinct(week, team = team1) %>%
     tidybayes::add_predicted_draws(model, seed = 42) %>%
     ungroup() %>%
     select(sim = .draw, week, team, score = .prediction) %>%
-    mutate(change = rbinom(n = n(), size = 1, prob = 0.1),
+    mutate(change = rbinom(n = n(), size = 1, prob = change_prob),
            dir = sample(x = c(-1, 1), size = n(),
                         replace = T, prob =  c(0.5, 0.5)),
            change_dir = change * dir) %>%
     group_by(sim, team) %>%
     mutate(changes = cumsum(change_dir),
-           adj_score = score + changes * 10) %>%
+           adj_score = score + changes * score_adj) %>%
     ungroup()
 
-  left_join(schedule %>%
-              filter(week <= max(scores$week)) %>%
-              left_join(rename(scores, score1 = score),
-                        by = c("week", "team1" = "team")) %>%
-              left_join(rename(scores, score2 = score),
-                        by = c("week", "team2" = "team")) %>%
-              mutate(win = score1 > score2) %>%
-              group_by(team = team1) %>%
-              summarize(actual_wins = sum(win),
-                        actual_points = sum(score1)),
-            schedule %>%
-              filter(week > max(scores$week)) %>%
-              left_join(rename(sims, score1 = adj_score),
-                        by = c("week", "team1" = "team")) %>%
-              left_join(rename(sims, score2 = adj_score),
-                        by = c("week", "team2" = "team", "sim")) %>%
-              mutate(win = score1 > score2) %>%
-              group_by(sim, team = team1) %>%
-              summarize(sim_wins = sum(win),
-                        sim_points = sum(score1),
-                        .groups = "drop"),
-            by = "team") %>%
-    mutate(wins = sim_wins + actual_wins,
-           points = sim_points + actual_points) %>%
-    select(sim, team, wins, points) %>%
+  sim <- bind_rows(
+    crossing(
+      distinct(sims, sim),
+      schedule %>%
+        filter(week <= max(scores$week)) %>%
+        left_join(rename(scores, score1 = score),
+                  by = c("week", "team1" = "team")) %>%
+        left_join(rename(scores, score2 = score),
+                  by = c("week", "team2" = "team")) %>%
+        mutate(win = score1 > score2)),
+    schedule %>%
+      filter(week > max(scores$week)) %>%
+      left_join(rename(sims, score1 = adj_score),
+                by = c("week", "team1" = "team")) %>%
+      left_join(rename(sims, score2 = adj_score),
+                by = c("week", "team2" = "team", "sim")) %>%
+      mutate(win = score1 > score2) %>%
+      select(week, team1, team2,
+             score1, score2, win, sim)
+  )
+
+  if ("gameID" %in% names(schedule)) {
+
+    sim <- mutate(sim, gameID = schedule$gameID, .after = 1)
+
+  }
+
+  return(sim)
+
+}
+
+#' @export
+simulate_season_standings <- function(sim_scores) {
+
+  sim_scores %>%
+    group_by(sim, team = team1) %>%
+    summarize(wins = sum(win),
+              points = sum(score1)) %>%
     group_by(sim) %>%
     arrange(-wins, -points) %>%
     mutate(playoffs = row_number() <= 4) %>%
-    ungroup() %>%
-    group_by(team) %>%
-    summarize(wins = mean(wins),
-              points = mean(points),
-              playoffs = mean(playoffs)) %>%
-    arrange(-playoffs)
-
-}
-
-
-#' @export
-simulate_season_scores <- function(scores,
-                                   n_sims,
-                                   season_weeks = 15,
-                                   .fun = simulate_score,
-                                   ...,
-                                   .parallel = TRUE,
-                                   .progress = FALSE) {
-
-  team_col <- names(select(scores, starts_with("team")))
-  scores_tmp <- scores %>%
-    extract_scores() %>%
-    select(week, team = starts_with("team"), score)
-
-
-  # add something for final week of regular season
-  if(.parallel) {
-
-    future::plan(future::multiprocess)
-    options(future.rng.onMisuse = 'ignore')
-
-    out <- tibble(sim = 1:n_sims) %>%
-      mutate(data = furrr::future_map(sim,
-                                      simulate_single_season,
-                                      scores = scores_tmp,
-                                      season_weeks = season_weeks,
-                                      .fun = .fun,
-                                      ...,
-                                      .progress = .progress)) %>%
-      unnest(data) %>%
-      set_names("sim", "week", team_col, "score")
-
-  } else {
-
-    out <- tibble(sim = 1:n_sims) %>%
-      mutate(data = map(sim,
-                        simulate_single_season,
-                        scores = scores_tmp,
-                        season_weeks = season_weeks,
-                        .fun = .fun,
-                        ...)) %>%
-      unnest(data) %>%
-      set_names("sim", "week", team_col, "score")
-
-  }
-
-  if("player" %in% names(scores)) {
-
-    out <- out %>%
-      rename(sim_week = week) %>%
-      mutate(league = scores$league[1],
-             leagueID = scores$leagueID[1],
-             season = scores$season[1],
-             week = max(scores$week),
-             .before = 1)
-
-  }
-
-  return(out)
-
-}
-
-#' @export
-simulate_season_standings <- function(sim_scores, schedule) {
-
-  team_col <- names(select(sim_scores, starts_with("team")))
-
-  if("league" %in% names(sim_scores)) {
-
-    sim_scores_tmp <- select(sim_scores, sim, week = sim_week,
-                             team = starts_with("team"), score)
-
-  } else {
-
-    sim_scores_tmp <- select(sim_scores, sim, week,
-                             team = starts_with("team"), score)
-
-  }
-
-  if("teamID" %in% names(schedule) | "team" %in% names(schedule)) {
-    schedule <- spread_schedule(schedule)
-  }
-
-  schedule <-  doublewide_schedule(schedule)
-
-  weeks_played <- sim_scores_tmp %>%
-    distinct(week, team, score) %>%
-    count(week) %>%
-    filter(n == n_distinct(sim_scores_tmp$team)) %>%
-    filter(week == max(week)) %>%
-    pull(week)
-  current_week <- weeks_played + 1
-
-  out <- schedule %>%
-    mutate_if(is.factor, as.character) %>%
-    inner_join(sim_scores_tmp %>%
-                 rename(team1 = team,
-                        score1 = score),
-               by = c("week", "team1")) %>%
-    inner_join(sim_scores_tmp %>%
-                 rename(team2 = team,
-                        score2 = score),
-               by = c("week", "team2", "sim")) %>%
-    mutate(diff = score1 - score2,
-           win = diff > 0,
-           leverage_win = if_else(week == current_week & win, 1, 0),
-           lose = diff < 0,
-           tie = diff == 0) %>%
-    group_by(team1, sim) %>%
-    summarise(pf = sum(score1),
-              pa = sum(score2),
-              wins = sum(win),
-              losses = sum(lose),
-              tie = sum(tie),
-              wp = wins / (wins + losses),
-              leverage_win = sum(leverage_win),
-              .groups = "drop") %>%
-    arrange(sim, -wp, -pf) %>%
-    set_names(team_col, "sim", "pf", "pa",
-              "wins", "losses", "tie",
-              "wp", "leverage_win") %>%
-    group_by(sim) %>%
-    mutate(playoffs = row_number() <= 4,
-           weeks_played = weeks_played) %>%
     ungroup()
-
-  if("league" %in% names(sim_scores)) {
-
-    out <- out %>%
-      mutate(league = sim_scores$league[1],
-             leagueID = sim_scores$leagueID[1],
-             season = sim_scores$season[1],
-             week = max(sim_scores$week),
-             .before = 1)
-
-
-  }
-
-  return(out)
 
 }
 
 #' @export
 simulate_final_standings <- function(sim_standings) {
 
-  team_col <- names(select(sim_standings, starts_with("team")))
-  weeks_played <- unique(sim_standings$weeks_played)
-  sim_standings_tmp <- select(sim_standings, team = starts_with("team"), sim:weeks_played)
-
-  out <- sim_standings_tmp %>%
-    rename(team = 1) %>%
+  sim_standings %>%
     group_by(team) %>%
-    summarise(pf = round(mean(pf), 1),
-              pa = round(mean(pa), 1),
-              wins = round(mean(wins), 1),
-              losses = round(mean(losses), 1),
-              tie = round(mean(tie), 1),
-              wp = mean(wp),
-              playoffs = mean(playoffs),
-              .groups = "drop") %>%
-    arrange(-playoffs, -wins, -pf) %>%
-    mutate(rank = 1L:n_distinct(sim_standings_tmp$team),
-           week = weeks_played) %>%
-    set_names(team_col, "pf", "pa",
-              "wins", "losses", "ties",
-              "wp", "playoffs",
-              "rank", "week") %>%
-    select(week, everything())
-
-  if("league" %in% names(sim_standings)) {
-
-    out <- out %>%
-      mutate(league = sim_standings$league[1],
-             leagueID = sim_standings$leagueID[1],
-             season = sim_standings$season[1],
-             week = max(sim_standings$week),
-             .before = 1)
-
-  }
-
-  return(out)
-
-}
-
-
-# Helper Functions --------------------------------------------------------
-
-simulate_score <- function(scores,
-                           .team,
-                           .reps = 1,
-                           .min_score = 50,
-                           .reg_games = 6,
-                           .reg_points = 110) {
-
-  tmp <- scores %>%
-    extract_scores() %>%
-    select(week, team = starts_with("team"), score) %>%
-    filter(team == .team)
-
-  team_scores <- tmp$score
-
-  weighting <- weight_games(team_scores, .reg_games)
-
-  if (max(tmp$week) < .reg_games) {
-
-    team_scores <- c(team_scores, .reg_points)
-
-  }
-
-  sim_scores <- rnorm(
-    .reps,
-    weighted.mean(team_scores, weighting),
-    weighted_sd(team_scores, weighting, method="ML")
-  )
-
-  if(!is.null(.min_score)) {
-
-    sim_scores <- if_else(sim_scores < .min_score, as.numeric(.min_score), sim_scores)
-
-  }
-
-  round(sim_scores, 2)
-
-}
-
-simulate_single_season <- function(scores,
-                                   season_weeks = 15,
-                                   sim = NULL,
-                                   .fun = simulate_score,
-                                   ...) {
-
-  set.seed(sim)
-
-  remaining_weeks <- (max(scores$week) + 1):season_weeks
-
-  team_col <- names(select(scores, starts_with("team")))
-  scores <- select(scores, week, team = starts_with("team"), score)
-  teams <- unique(scores$team)
-
-  for (week in remaining_weeks) {
-
-    for (team in teams) {
-
-      simulated_score <- .fun(scores,
-                              team,
-                              ...)
-
-      scores <- scores %>%
-        add_row(week = week,
-                team = team,
-                score = round(simulated_score, 2))
-
-    }
-
-  }
-
-  set_names(scores, c("week", team_col, "score"))
+    summarize(wins = mean(wins),
+              points = mean(points),
+              playoffs = mean(playoffs)) %>%
+    arrange(-playoffs)
 
 }

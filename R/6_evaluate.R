@@ -76,7 +76,6 @@ evaluate_lineup <- function(lineup_df,
   if (plot) {
 
     best_lineup_final %>%
-      mutate(team = factor(team)) %>%
       ggplot(aes(week, delta, fill = delta)) +
       geom_bar(stat = 'identity', color = "black") +
       scale_x_continuous(breaks = 1:max(lineup_df$week),
@@ -102,76 +101,71 @@ evaluate_lineup <- function(lineup_df,
 }
 
 #' @export
-evaluate_model <- function(scores,
-                           evaluation_week,
-                           .fun = simulate_score,
-                           ...) {
+evaluate_model <- function(scores, schedule = NULL) {
 
-  team_col <- names(select(scores, starts_with("team")))
-  scores_tmp <- scores %>%
-    extract_scores() %>%
-    select(week, team = starts_with("team"), score)
-  teams <- unique(scores_tmp$team)
+  sims <- tibble(week = 2:max(scores$week)) %>%
+    mutate(evaluation_scores = map(evaluation_week, ~filter(scores, week < .x)),
+           model = map(evaluation_scores, fit_model),
+           sims = map(model,
+                      ~distinct(scores, team) %>%
+                        tidybayes::add_predicted_draws(.x, seed = 42) %>%
+                        ungroup() %>%
+                        select(team, score = .prediction) %>%
+                        nest(data = -team))) %>%
+    select(week = evaluation_week, sims) %>%
+    unnest(sims)
 
-  previous_scores <- scores_tmp %>%
-    filter(week < evaluation_week) %>%
-    mutate(evaluation_week = evaluation_week)
+  if(!is.null(schedule)) {
 
-  actual_scores <- scores_tmp %>%
-    filter(week == evaluation_week) %>%
-    select(team1 = team, score1 = score)
+    tmp <-  schedule %>%
+      filter(week > 1) %>%
+      inner_join(rename(scores, team1 = team, score1 = score), by = c("week", "team1")) %>%
+      left_join(rename(scores, team2 = team, score2 = score), by = c("week", "team2")) %>%
+      left_join(rename(sims, team1 = team, data1 = data), by = c("week", "team1")) %>%
+      left_join(rename(sims, team2 = team, data2 = data), by = c("week", "team2"))
 
-  set.seed(42)
+  } else {
 
-  pred_scores <- actual_scores %>%
-    mutate(sim1 = map(team1, .fun,
-                      scores = previous_scores,
-                      ...))
+    tmp <- crossing(week = 2:max(scores$week),
+             team1 = unique(scores$team),
+             team2 = unique(scores$team)) %>%
+      filter(team1 != team2) %>%
+      left_join(rename(scores, team1 = team, score1 = score), by = c("week", "team1")) %>%
+      left_join(rename(scores, team2 = team, score2 = score), by = c("week", "team2")) %>%
+      left_join(rename(sims, team1 = team, data1 = data), by = c("week", "team1")) %>%
+      left_join(rename(sims, team2 = team, data2 = data), by = c("week", "team2"))
 
-  out <- crossing(pred_scores,
-                  rename(pred_scores,
-                         team2 = team1, score2 = score1, sim2 = sim1)) %>%
-    filter(team1 != team2) %>%
+  }
+
+  tmp %>%
     mutate(margin = score1 - score2,
-           sim = map2(sim1, sim2, ~ .x - .y),
-           win_prob = map_dbl(sim, convert_wp),
-           lower80 = map_dbl(sim, ~ quantile(.x, 0.1)),
-           upper80 = map_dbl(sim, ~ quantile(.x, 0.9)),
-           lower95 = map_dbl(sim, ~ quantile(.x, 0.025)),
-           upper95 = map_dbl(sim, ~ quantile(.x, 0.975)),
-           pred_outcome = if_else(win_prob > 50, 1, 0),
-           act_outcome = if_else(score1 - score2 > 0, 1, 0),
-           correct = if_else(pred_outcome == act_outcome, 1, 0),
-           range80 = if_else(between(margin, lower80, upper80), 1, 0),
-           range95 = if_else(between(margin, lower95, upper95), 1, 0),
+           sims = map2(data1, data2, ~.x - .y),
+           win_prob = map_dbl(sims, ~convert_wp(.$score)),
+           lower50 = map_dbl(sims, ~ quantile(.$score, 0.25)),
+           upper50 = map_dbl(sims, ~ quantile(.$score, 0.75)),
+           lower80 = map_dbl(sims, ~ quantile(.$score, 0.1)),
+           upper80 = map_dbl(sims, ~ quantile(.$score, 0.9)),
+           lower95 = map_dbl(sims, ~ quantile(.$score, 0.025)),
+           upper95 = map_dbl(sims, ~ quantile(.$score, 0.975)),
+           pred_outcome = if_else(win_prob > 50, 1L, 0L),
+           act_outcome = if_else(score1 - score2 > 0, 1L, 0L),
+           correct = if_else(pred_outcome == act_outcome, 1L, 0L),
+           range50 = pmap_int(list(margin, lower50, upper50),
+                              ~if_else(between(..1, ..2, ..3), 1L, 0L)),
+           range80 = pmap_int(list(margin, lower80, upper80),
+                              ~if_else(between(..1, ..2, ..3), 1L, 0L)),
+           range95 = pmap_int(list(margin, lower95, upper95),
+                              ~if_else(between(..1, ..2, ..3), 1L, 0L)),
            sim = case_when(
              win_prob == 0 & correct == 1 ~ 1000,
              win_prob == 0 & correct == 0 ~ -1000,
              correct == 1 ~ win_prob,
-             TRUE ~ -win_prob),
-           week = evaluation_week) %>%
-    select(week, team1, team2, margin,
-           lower80, upper80, lower95, upper95,
-           range80, range95,
-           win_prob, pred_outcome, act_outcome,
-           correct, sim) %>%
-    set_names("week", team_col, "opp", "margin",
-              "lower80", "upper80", "lower95", "upper95",
-              "range80", "range95",
-              "win_prob", "pred_outcome", "act_outcome",
-              "correct", "sim")
-
-  if("league" %in% names(scores)) {
-
-    out <- out %>%
-      mutate(league = scores$league[1],
-             leagueID = scores$leagueID[1],
-             season = scores$season[1],
-             .before = 1)
-
-  }
-
-  return(out)
+             TRUE ~ -win_prob)) %>%
+    select(week, team = team1, opp = team2, margin, act_outcome,
+           win_prob, pred_outcome, correct, sim,
+           lower50, upper50, range50,
+           lower80, upper80, range80,
+           lower95, upper95, range95)
 
 }
 
@@ -304,5 +298,12 @@ max_points_flex <- function(best_lineup, lineup_df, .team, .week,
   best_lineup %>%
     select(-player) %>%
     summarise(max_points = sum(max_points))
+
+}
+
+convert_wp <- function(sim) {
+
+  round(pnorm(0, mean(sim), sd(sim), lower.tail=FALSE) * 100 -
+          round(dnorm(0, mean(sim), sd(sim)) * 100, 2)/2, 2)
 
 }
