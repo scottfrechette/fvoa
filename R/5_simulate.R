@@ -53,12 +53,24 @@ simulate_season_scores <- function(scores, schedule, model,
 #' @export
 simulate_season_standings <- function(sim_scores) {
 
+  leverage_week <- sim_scores %>%
+    count(week, score1, score2) %>%
+    filter(n == max(n)) %>%
+    summarize(weeks_played = max(week) + 1) %>%
+    pull()
+
   sim_scores %>%
     group_by(sim, team = team1) %>%
-    summarize(wins = sum(win),
-              points = sum(score1)) %>%
+    summarize(pf = sum(score1),
+              pa = sum(score2),
+              wins = sum(score1 > score2),
+              losses = sum(score1 < score2),
+              tie = sum(score1 == score2),
+              wp = wins / n(),
+              leverage_week = leverage_week,
+              leverage_win = sum(score1 > score2 & week == leverage_week)) %>%
     group_by(sim) %>%
-    arrange(-wins, -points) %>%
+    arrange(-wins, -pf) %>%
     mutate(playoffs = row_number() <= 4) %>%
     ungroup()
 

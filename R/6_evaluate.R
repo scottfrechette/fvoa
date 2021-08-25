@@ -104,7 +104,7 @@ evaluate_lineup <- function(lineup_df,
 evaluate_model <- function(scores, schedule = NULL) {
 
   sims <- tibble(week = 2:max(scores$week)) %>%
-    mutate(evaluation_scores = map(evaluation_week, ~filter(scores, week < .x)),
+    mutate(evaluation_scores = map(week, ~filter(scores, week < .x)),
            model = map(evaluation_scores, fit_model),
            sims = map(model,
                       ~distinct(scores, team) %>%
@@ -112,7 +112,7 @@ evaluate_model <- function(scores, schedule = NULL) {
                         ungroup() %>%
                         select(team, score = .prediction) %>%
                         nest(data = -team))) %>%
-    select(week = evaluation_week, sims) %>%
+    select(week, sims) %>%
     unnest(sims)
 
   if(!is.null(schedule)) {

@@ -32,7 +32,7 @@ plot_scores <- function(scores, x = week, y = score, group = team) {
 }
 
 #' @export
-boxplots <- function(scores, score = score, team = team) {
+plot_boxplots <- function(scores, score = score, team = team) {
   ggplot(scores, aes(x=reorder(team, -score, fun=mean), y=score, fill=team)) +
     geom_boxplot(coef = 1.25, outlier.alpha = 0.6) +
     stat_summary(fun.y=mean, geom="point", shape=18, size=3, show.legend=FALSE) +
@@ -43,7 +43,7 @@ boxplots <- function(scores, score = score, team = team) {
 }
 
 #' @export
-joy_plots <- function(scores, score = score, team = team) {
+plot_joy_plots <- function(scores, score = score, team = team) {
 
   requireNamespace("ggridges", quietly = TRUE)
 
@@ -141,6 +141,110 @@ plot_team_evaluation <- function(df) {
 }
 
 #' @export
+plot_playoff_leverage1 <- function(sim_standings) {
+
+  library(patchwork)
+
+  leverage_week <- unique(sim_standings$leverage_week)
+
+  leverage_plot <- sim_standings %>%
+    group_by(team, leverage_win) %>%
+    summarize(playoffs = mean(playoffs),
+              .groups = "drop") %>%
+    mutate(leverage_win = if_else(leverage_win == 1, "Win", "Lose")) %>%
+    spread(leverage_win, playoffs) %>%
+    mutate(delta = Win - Lose,
+           Total = 1) %>%
+    ggplot(aes(reorder(team, Win), y = Total)) +
+    geom_bar(stat = "identity", fill = "white", color = "grey", alpha = 0.4) +
+    geom_bar(stat = "identity", aes(y = Win, fill = team), alpha = 0.5) +
+    geom_bar(stat = "identity", aes(y = Lose, fill = team)) +
+    geom_text(aes(y = Total + 0.005,
+                  label = scales::percent(delta, accuracy = 1)),
+              color = "grey30", hjust = 0) +
+    scale_y_continuous(labels = scales::percent,
+                       limits = c(0, 1.05),
+                       expand = c(0, NA),
+                       breaks = c(0, .25, .50, .75, 1)) +
+    guides(fill = "none") +
+    labs(x = NULL,
+         y = NULL,
+         title = str_glue("Playoff Probability Leverage (Week {leverage_week})")) +
+    coord_flip() +
+    theme(plot.title = element_text(hjust = 0.5, size = 28, face = "bold"),
+          axis.text.x = element_text(size = 12, color = "grey"),
+          panel.background = element_blank(),
+          panel.border = element_blank(),
+          strip.background = element_rect(color = "black"),
+          panel.ontop = T,
+          panel.grid = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.major.x = element_line(color = "white", size = 0.2),
+          strip.text = element_text(size =12))
+
+  # Core dataset with the basic labels
+  label_df <- tibble(
+    x = c(15, 15, 77, 101),
+    y = c(1.6, 0.35, 0.35, 1),
+    label = c("Chance to make playoffs with win ", "Chance to make playoffs with loss ", "Leverage", "X%")
+  )
+
+
+  # the horizontal lines
+  seg_df <- tibble(
+    x1 = c(0.2, 90, 0.2, 74.8, 75.3, 90, 103),
+    x2 = c(0.2, 90, 0.2, 74.8, 75.3, 90, 103),
+    y1 = c(1.3, 1.3, rep(.7, 5)),
+    y2 = c(1.61, 1.61, rep(.343, 5))
+
+  )
+
+  # vertical lines
+  seg2_df <- tibble(
+    x1 = c(0.2, 0.2, 75.3),
+    x2 = c(90, 74.8, 103),
+    y1 = c(1.6, .35, .35),
+    y2 = c(1.6, .35, .35)
+  )
+
+  legend_plot <- tibble(
+    x = 75,
+    y = factor("Y"),
+    x2 = 90
+  ) %>%
+    ggplot(aes(x = x, y = y)) +
+    geom_col(aes(x = 100), fill = "white", color = "grey", width = 0.4) +
+    geom_col(aes(x = x2), width = 0.4, color = "#DC143C", fill = "grey") +
+    geom_col(width = 0.4, color = "black", fill = "black") +
+    geom_segment(
+      data = seg_df,
+      aes(x = x1, y = y1, xend = x2, yend = y2),
+      color = c(rep("black", 4), rep("#DC143C", 3)),
+      size = 1
+    ) +
+    geom_segment(
+      data = seg2_df,
+      aes(x = x1, y = y1, xend = x2, yend = y2),
+      color = c("black", "black", "#DC143C"),
+      size = 1
+    ) +
+    geom_label(
+      data = label_df,
+      aes(x = x, y = y, label = label),
+      hjust = 0, size = 6, fontface = "bold", fill = "white",
+      color = c("black", "black", "#DC143C", "#DC143C"),
+      label.size = NA,
+      # family = "Oswald",
+      label.padding = unit(0.05, "lines"),
+    ) +
+    coord_cartesian(ylim = c(0.7, 1.2), xlim = c(0, 108)) +
+    theme_void() +
+    theme(plot.margin = unit(c(0.5, 1.5, 0.5, 1.5), "cm"))
+
+  leverage_plot / legend_plot + plot_layout(heights = c(5, 1))
+
+}
+
 plot_playoff_leverage <- function(scores, schedule, playoff_leverage_df) {
 
   playoff_leverage_df <- playoff_leverage_df %>%
