@@ -26,8 +26,8 @@ plot_scores <- function(scores, x = week, y = score, group = team) {
     scale_y_continuous(breaks = scales::pretty_breaks(n = 5)) +
     scale_x_continuous(breaks = scales::pretty_breaks(n = 7)) +
     labs(y = quo_name(y_quo), x = quo_name(x_quo), title = "weekly scores") +
-    guides(color=FALSE) +
-    stat_smooth(se=FALSE, method="lm", linetype = 2, size=0.5, color="grey") +
+    guides(color = "none") +
+    stat_smooth(se = FALSE, method="lm", linetype = 2, size=0.5, color="grey") +
     theme_fvoa()
 }
 
@@ -35,9 +35,9 @@ plot_scores <- function(scores, x = week, y = score, group = team) {
 plot_boxplots <- function(scores, score = score, team = team) {
   ggplot(scores, aes(x=reorder(team, -score, fun=mean), y=score, fill=team)) +
     geom_boxplot(coef = 1.25, outlier.alpha = 0.6) +
-    stat_summary(fun.y=mean, geom="point", shape=18, size=3, show.legend=FALSE) +
-    guides(fill=F) +
-    labs(y = "score", x = "", title = "team Boxplots") +
+    stat_summary(fun = mean, geom="point", shape=18, size=3, show.legend = FALSE) +
+    guides(fill = "none") +
+    labs(y = "score", x = "", title = "Team Boxplots") +
     theme_fvoa() +
     theme(panel.border = element_blank())
 }
@@ -50,8 +50,8 @@ plot_joy_plots <- function(scores, score = score, team = team) {
   ggplot(scores, aes(x = score, y = reorder(team, score, FUN = mean), fill = team)) +
     ggridges::geom_density_ridges() +
     geom_vline(aes(xintercept = mean(score)), alpha = 0.5) +
-    labs(x = "Distribution of scores", y = "", title = "team Density Plots") +
-    guides(fill=FALSE) +
+    labs(x = "Distribution of scores", y = "", title = "Team Density Plots") +
+    guides(fill = "none") +
     theme_fvoa()
 }
 
@@ -93,7 +93,7 @@ plot_fvoa <- function(fvoa_df, x = week, y = fvoa, group = team) {
     scale_y_continuous(breaks = c(-100, -75, -50, -25, 0, 25, 50, 75, 100), limits = c(-100, 100)) +
     scale_x_continuous(breaks = c(1:15), limits = c(1, 15)) +
     labs(y = "FVOA", x = "week", title = "weekly FVOA") +
-    guides(color=FALSE) +
+    guides(color = "none") +
     theme_fvoa()
 }
 
@@ -134,7 +134,7 @@ plot_team_evaluation <- function(df) {
     ggplot(aes(x = week, y = margin, fill = sign)) +
     geom_bar(stat = "identity") +
     facet_wrap(~reorder(team, - pos_count), ncol = n_distinct(df$team)/2) +
-    guides(fill=FALSE) +
+    guides(fill = "none") +
     labs(title = "weekly Projection v Actual Results", y = "Margin") +
     theme_fvoa() +
     theme(panel.grid.major.y = element_blank())
@@ -257,11 +257,11 @@ plot_simulation <- function(simulated_season_df, plot = c(Wins, points, Percent)
     ggplot(aes(week, !!plot_quo, color = team)) +
     geom_line(size=1.5) +
     geom_point(size = 2) +
-    stat_smooth(se=FALSE, method="lm", linetype = 2, size=0.5, color="grey") +
+    stat_smooth(se = FALSE, method="lm", linetype = 2, size=0.5, color="grey") +
     facet_wrap(~reorder(team, rank, FUN = last), ncol = 5) +
     labs(y = "Wins", x = "week",
          title = plots %>% pull(!!plot_quo)) +
-    guides(color=FALSE) +
+    guides(color = "none") +
     scale_y_continuous(breaks = scales::pretty_breaks(n = 5)) +
     scale_x_continuous(breaks = c(1:15), limits = c(1, 15)) +
     theme_fvoa()
@@ -324,7 +324,7 @@ plot_quadrant <- function(quadrants, x = c("pf", "pa", "delta")) {
     labs(y = "Win Percentage",
          x = x_label) +
     tidyquant::scale_color_tq() +
-    guides(color = F)
+    guides(color = "none")
 
 }
 
@@ -353,7 +353,7 @@ plot_sim_matchup <- function(sim_scores, team1, team2,
     ggplot(aes(.[[3]], .[[4]], color = winner)) +
     geom_point(alpha = 0.5) +
     geom_abline(color = "grey30", linetype = 2) +
-    guides(color = FALSE) +
+    guides(color = "none") +
     labs(x = str_glue(team1, " ({wp[[1]]})"),
          y = str_glue(team2, " ({wp[[2]]})"))
 
@@ -520,7 +520,7 @@ plot_model_eval_weekly <- function(evaluation_df) {
          y = "Percent Correct") +
     theme(panel.background= element_blank(),
           panel.border = element_blank()) +
-    guides(fill=F)
+    guides(fill = "none")
 }
 
 #' @export
