@@ -67,7 +67,7 @@ scrape_team <- function(league, leagueID, week, season = 2020) {
 
   if (league == "yahoo") {
 
-    yahoo_teamIDs(leagueID) %>%
+    scrape_yahoo_teamIDs(leagueID) %>%
       select(teamID) %>%
       pull() %>%
       map_df(~ scrape_yahoo_team(leagueID, week, season, .x))
@@ -87,11 +87,11 @@ scrape_team <- function(league, leagueID, week, season = 2020) {
 #' @export
 scrape_win_prob <- function(leagueID, week, season = 2020, league = "yahoo"){
 
-  yahoo_teamIDs(leagueID) %>%
+  scrape_yahoo_teamIDs(leagueID) %>%
     crossing(week) %>%
     mutate(league = 'yahoo',
            leagueID = leagueID,
-           prob = pmap_chr(list(week, leagueID, teamID), yahoo_winprob),
+           prob = pmap_chr(list(week, leagueID, teamID), scrape_yahoo_winprob),
            # type = str_extract(prob, "[:alpha:]*"),
            wp = str_extract(prob, "[:digit:]+"),
            wp = as.numeric(wp)/100) %>%
@@ -191,8 +191,8 @@ extract_projections <- function(team) {
     dplyr::select(week, team = starts_with("team"), score, proj_pts) %>%
     dplyr::group_by(week, team) %>%
     dplyr::summarize(proj = sum(proj_pts),
-              act = score[1],
-              .groups = "drop") %>%
+                     act = score[1],
+                     .groups = "drop") %>%
     purrr::set_names("week", team_col, "proj", "act")
 
 }
@@ -244,7 +244,7 @@ valid_teamID <- function(leagueID, teamID) {
 
 }
 
-yahoo_teamIDs <- function(leagueID, teamID = 1:20) {
+scrape_yahoo_teamIDs <- function(leagueID, teamID = 1:20) {
 
   tibble(teamID) %>%
     mutate(team = map(teamID, ~ valid_teamID(leagueID, .x))) %>%
@@ -339,7 +339,7 @@ scrape_yahoo_team <- function(leagueID, week, season, teamID) {
 
 }
 
-yahoo_winprob <- function(week, leagueID, teamID) {
+scrape_yahoo_winprob <- function(week, leagueID, teamID) {
 
   url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID,
                 "/matchup?week=", week, "&mid1=", teamID)
@@ -376,7 +376,7 @@ scrape_yahoo_players <- function(leagueID, week, position, page) {
              rvest::html_nodes("table") %>%
              .[[2]] %>%
              rvest::html_nodes(xpath = '//*[@class="Ta-start Nowrap Bdrend"]') %>%
-             map(yahoo_player_team) %>%
+             map(scrape_yahoo_player_team) %>%
              unlist())
 
   } else {
@@ -396,14 +396,14 @@ scrape_yahoo_players <- function(leagueID, week, position, page) {
              rvest::html_nodes("table") %>%
              .[[2]] %>%
              rvest::html_nodes(xpath = '//*[@class="Alt Ta-start Nowrap Bdrend"]') %>%
-             map(yahoo_player_team) %>%
+             map(scrape_yahoo_player_team) %>%
              unlist())
 
   }
 
 }
 
-yahoo_player_team <- function(x) {
+scrape_yahoo_player_team <- function(x) {
 
   team <- rvest::html_text(x)
 
@@ -419,53 +419,6 @@ yahoo_player_team <- function(x) {
       str_extract("\\d*$")
 
   }
-
-}
-
-ffespn_api <- function(path, query = NULL, headers = NULL) {
-  # url
-  baseurl <- "http://fantasy.espn.com/"
-  path <- paste0("apis/v3/games/ffl/", path)
-  url <- httr::modify_url(baseurl, path = path, query = query)
-
-  # get data
-  if (is.null(headers)) {
-    resp <- httr::GET(url)
-  } else {
-    resp <- httr::GET(url, headers)
-  }
-
-  # get content
-  page <- httr::content(resp, "text", encoding = "utf-8")
-
-  # check errors
-  if (httr::http_error(resp)) {
-    stop(
-      sprintf(
-        "ESPN API request failed [%s]\n[%s]",
-        httr::status_code(resp), url
-      ),
-      call. = FALSE
-    )
-  }
-
-  # check data type
-  if (httr::http_type(resp) != "application/json") {
-    stop("API did not return html", call. = FALSE)
-  }
-
-  # parse content
-  x <- jsonlite::fromJSON(page, simplifyVector = FALSE, simplifyDataFrame = FALSE, simplifyMatrix = FALSE)
-
-  x
-}
-
-
-tidy_espn_cols <- function(df) {
-
-  df %>%
-    map_if(is.data.frame, list) %>%
-    as_tibble()
 
 }
 
@@ -612,60 +565,17 @@ scrape_espn_team <- function(leagueID = 299999, week = 1, season = 2020) {
 scrape_espn_players <- function(leagueID = 299999, season = 2020, week,
                                 pos = slot_names,
                                 projections = TRUE) {
-  pos <- match.arg(pos)
-  stopifnot(is.numeric(week), is.numeric(season), is.character(pos))
-  stopifnot(is_scalar(week), is_scalar(season), is_scalar(pos))
-  stopifnot(week >= 0L, week <= 17L)
+
+  conn <- ffscrapr::espn_connect(season = season, league_id = leagueID)
 
   season <- as.integer(season)
   week <- as.integer(week)
   posID <- slot_name_to_id(pos)
   projID <- as.integer(projections)
 
-  path <- sprintf("seasons/%s/segments/0/leagues/%s", season, leagueID)
-
-  query <- list("view" = "kona_player_info")
-
   players = list(
     filterSlotIds = list(value = posID),
     filterStatsForSourceIds = list(value = projID), # 0 = actual, 1 = projected
-    offset = jsonlite::unbox(0)
-  )
-
-  if (week == 0) {
-    players$filterStatsForExternalIds = list(value = season)
-  } else {
-    players$filterStatsForSplitTypeIds = list(value = c(week))
-  }
-
-  x_fantasy_filter <- list("players" = players)
-  headers <- httr::add_headers(.headers = c(
-    "X-Fantasy-Filter" = jsonlite::toJSON(x_fantasy_filter),
-    "X-Fantasy-Source" = "kona",
-    "Accept" =  "application/json",
-    "Referer" =  "http://fantasy.espn.com/football/players/projections",
-    "DNT" = "1",
-    "Connection" =  "keep-alive",
-    "X-Fantasy-Platform" = "kona-PROD-669a217c5628b670cf386bd4cebe972bf88022eb"
-  ))
-
-  x <- ffespn_api(path, query, headers)
-
-  if (identical(length(x$players), 0L)) {
-    stop("results are empty. no players found", call. = FALSE)
-  }
-
-  tidy_projections(x)
-}
-
-
-scrape_espn_players1 <- function(leagueID, season, week) {
-
-  conn <- ffscrapr::espn_connect(season = season, league_id = leagueID)
-
-  players = list(
-    filterSlotIds = list(value = 0L), # QB
-    filterStatsForSourceIds = list(value = 1L), # 0 = actual, 1 = projected
     offset = jsonlite::unbox(0)
   )
 
@@ -678,21 +588,28 @@ scrape_espn_players1 <- function(leagueID, season, week) {
   player_scores <- ffscrapr::espn_getendpoint(conn, view = "kona_player_info",
                                               x_fantasy_filter = jsonlite::toJSON(list("players" = players)))
 
-  player_scores$content %>%
+  out <- player_scores$content %>%
     as_tibble() %>%
     select(players) %>%
-    hoist("players", "id", "onTeamId", "player", "ratings", "status", "rosterLocked",
-          "tradeLocked", "keeperValue", "keeperValueFuture", "lineupLocked") %>%
+    hoist(players, "id", "onTeamId", "player", "ratings", "status", "rosterLocked",
+          "tradeLocked", #"keeperValue", "keeperValueFuture",
+          "lineupLocked") %>%
     select(-players) %>%
-    unnest("ratings") %>%
-    hoist("ratings", "positionalRanking", "totalRanking", "totalRating") %>%
-    hoist("player", "fullName", "active", "droppable", "injured", "injuryStatus",
+    unnest(ratings) %>%
+    hoist(player, "fullName", "active", "droppable", "injured", "injuryStatus",
           "proTeamId", "ownership", "stats", "eligibleSlots") %>%
-    select(-"player") %>%
-    hoist("ownership", "auctionValueAverage", "averageDraftPosition",
-          "percentOwner", "percentChanged", "percentStarted") %>%
-    select(-"ownership")
+    select(-player) %>%
+    hoist(ownership, "averageDraftPosition", #"auctionValueAverage",
+          "percentOwned", "percentChange", "percentStarted") %>%
+    select(-ownership)
 
+  if (!all(is.na(out$ratings))) {
+
+    out <- hoist(out, ratings, "positionalRanking", "totalRanking", "totalRating")
+
+  }
+
+  return(out)
 }
 
 
