@@ -13,52 +13,14 @@ scrape_schedule <- function(league, leagueID,
 
   if(league == "yahoo") {
 
-    map_df(1:17, ~ scrape_yahoo_schedule(leagueID, season, .x)) %>%
-      mutate(season = as.integer(season)) %>%
-      select(league, leagueID, season, week, gameID, team1, team2)
+    map_df(1:17, ~ scrape_yahoo_schedule(leagueID, season, .x))
 
   } else if (league == "espn") {
 
-    if(season == as.numeric(format(Sys.Date(),'%Y'))) {
+    ffscrapr::espn_connect(season, leagueID) %>%
+      ffscrapr::ff_schedule() %>%
+      select(week, teamID = 2, team_score = 3, opponentID = 5, opponent_score = 6)
 
-      url <- str_glue("https://fantasy.espn.com/apis/v3/games/ffl/seasons/{season}/segments/0/leagues/{leagueID}?view=mMatchupScore&view=mRoster")
-      scores <- jsonlite::fromJSON(url) %>%
-        .$schedule
-
-      df <- bind_cols(gameID = scores$id,
-                      week = scores$matchupPeriodId,
-                      scores$home %>%
-                        select(team1 = teamId, team1_points = totalPoints),
-                      scores$away %>%
-                        select(team2 = teamId, team2_points = totalPoints),
-                      playoff = scores$playoffTierType)
-
-    } else {
-
-      url <- str_glue("https://fantasy.espn.com/apis/v3/games/ffl/leagueHistory/{leagueID}?season={season}&view=mMatchupScore")
-      scores <- jsonlite::fromJSON(url) %>%
-        .$schedule %>%
-        .[[1]] %>%
-        tidy_espn_cols()
-
-      df <- bind_cols(gameID = scores$id,
-                      week = scores$matchupPeriodId,
-                      scores$home[[1]] %>%
-                        select(team1 = teamId, team1_points = totalPoints),
-                      scores$away[[1]] %>%
-                        select(team2 = teamId, team2_points = totalPoints),
-                      playoff = scores$playoffTierType)
-
-    }
-
-    df %>%
-      mutate(league = 'espn',
-             leagueID = leagueID,
-             season = season,
-             game_type = if_else(playoff == "NONE", "regular", "playoff")) %>%
-      select(league, leagueID, season, week, gameID, team1, team2) %>%
-      as_tibble() %>%
-      mutate(across(c(-league), .fns = as.integer))
   }
 }
 
@@ -74,7 +36,14 @@ scrape_team <- function(league, leagueID, week, season = 2020) {
 
   } else if (league == "espn") {
 
-    scrape_espn_team(leagueID, week, season)
+    # scrape_espn_team(leagueID, week, season)
+
+    ffscrapr::espn_connect(season, leagueID) %>%
+      ffscrapr::ff_starters(week = week) %>%
+      select(week, teamID = 2, team = 3, score = 4,
+             playerID = 7, player = 8, position = 9,
+             roster = 5, #proj_pts = 4,
+             points = 6)
 
   } else {
 
@@ -104,9 +73,15 @@ scrape_player_projections <- function(league, leagueID, week, season = 2020) {
 
   name_removals <- "\\.| I$| II$| III$| IV$| V$| Jr.$| Sr.$"
 
-  player_table <- scrape_player_ids(season) %>%
-    dplyr::select(id, player, position) %>%
-    dplyr::mutate(player = str_remove_all(player, name_removals))
+  # player_table <- scrape_player_ids(season) %>%
+  #   dplyr::select(id, player, position) %>%
+  #   dplyr::mutate(player = str_remove_all(player, name_removals))
+
+  player_table <- ffscrapr::dp_playerids() %>%
+    mutate(player_clean = str_remove_all(name, name_removals)) %>%
+    select(player = name, player_clean, team, position, age, draft_year,
+           espnID = espn_id, yahooID = yahoo_id,
+           fantasyprosID = fantasypros_id, mflID = mfl_id)
 
   if (league == "yahoo") {
 
@@ -213,7 +188,7 @@ scrape_player_ids <- function(season) {
                   birthdate = as.Date(as.POSIXct(as.numeric(birthdate),
                                                  origin = "1970-01-01")),
                   age = as.integer(lubridate::year(Sys.time()) - lubridate::year(birthdate)),
-                  exp = 2020 - as.integer(draft_year)) %>%
+                  exp = season - as.integer(draft_year)) %>%
     dplyr::select(id, player, position, team, exp)
 
 }
@@ -255,36 +230,37 @@ scrape_yahoo_teamIDs <- function(leagueID, teamID = 1:20) {
 
 scrape_yahoo_schedule <- function(leagueID, season, week) {
 
-  url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID, "?matchup_week=", week)
+  url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID, "?matchup_week=", week, "&module=matchups&lhst=matchups")
 
-  page <- xml2::read_html(url)
-
-  schedule <- page %>%
+  teamIDs <- rvest::read_html(url) %>%
     rvest::html_nodes("#matchupweek .F-link") %>%
-    rvest::html_attr('href') %>%
+    rvest::html_attr("href") %>%
     str_extract("\\d*$") %>%
     as_tibble() %>%
-    mutate(week = week,
-           gameID = ceiling(row_number()/2)) %>%
-    select(week, gameID, team = value)
+    mutate(odd = if_else(!row_number() %% 2, "opponentID", "teamID"),
+           gameID = (row_number() + 1) %/% 2) %>%
+    spread(odd, value) %>%
+    select(teamID, opponentID)
 
-  schedule <- schedule %>%
-    group_by(week, gameID) %>%
-    summarize(tmp = paste(team, collapse = ","),
-              .groups = "drop") %>%
-    separate(tmp, into = paste0("team", 1:2), sep = ",")
+  tmp <- rvest::read_html(url) %>%
+    rvest::html_nodes("#matchupweek .List-rich") %>%
+    rvest::html_text() %>%
+    str_remove_all(., "\\n|   ") %>%
+    as_tibble() %>%
+    separate_rows(value, sep = "View Matchup") %>%
+    filter(value != "") %>%
+    separate(value, c("team1", "team2"), sep = "vs") %>%
+    mutate(gameID = row_number(),
+           week = week) %>%
+    extract(team1, c("team_score", "team_projected", "team", "team_record"),
+            "(\\d+\\.\\d+)  ([0-9.]+) +(.*)  ([0-9-)]+)") %>%
+    extract(team2, c("opponent_score", "opponent_projected", "opponent", "opponent_record"),
+            "(\\d+\\.\\d+)  ([0-9.]+) +(.*)  ([0-9-)]+)") %>%
+    bind_cols(teamIDs) %>%
+    select(week, teamID, team_score, opponentID, opponent_score)
 
-  schedule_tmp <- schedule
-  schedule_rev <- schedule_tmp %>%
-    select(week, gameID, team1 = team2, team2 = team1)
-
-  bind_rows(schedule_tmp, schedule_rev) %>%
-    arrange(week, gameID, team1) %>%
-    mutate(league = 'yahoo',
-           leagueID = leagueID,
-           season = season,
-           .before = 1) %>%
-    mutate(across(c(-league), .fns = as.integer))
+  bind_rows(tmp,
+            rename(tmp, opponentID = 2, opponent_score = 3, teamID = 4, team_score = 5))
 
 }
 
@@ -318,24 +294,21 @@ scrape_yahoo_team <- function(leagueID, week, season, teamID) {
 
   bind_rows(starters,
             bench) %>%
-    rename(act_pts = `Fan Pts`,
-           proj_pts = Proj,
+    rename(points = `Fan Pts`,
+           projected = Proj,
            roster = Pos) %>%
     separate(Player, c("notes", "player"), "Notes\\s+|Note\\s+") %>%
     separate(player, c("player", "result"), "Final|Bye") %>%
     separate(player, c("player", "position"), " - ") %>%
-    mutate(league = 'yahoo',
-           leagueID = as.integer(leagueID),
-           season = season,
-           teamID = teamID,
+    mutate(teamID = teamID,
            week = week,
            player = str_replace(player, "\\s[:alpha:]+$", ""),
            position = str_extract(position, "[:alpha:]+"),
            score = sum(starters$`Fan Pts`, na.rm = T),
-           across(c(season, week, teamID), as.integer)) %>%
+           across(c(week, teamID), as.integer)) %>%
     drop_na(player) %>%
-    select(league, leagueID, season, week, teamID, score,
-           player, position, roster, proj_pts, act_pts)
+    select(week, teamID, score, player, #playerID,
+           position, roster, projected, points)
 
 }
 
