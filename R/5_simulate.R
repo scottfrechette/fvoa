@@ -82,7 +82,7 @@ simulate_final_standings <- function(sim_standings) {
   sim_standings %>%
     group_by(team) %>%
     summarize(wins = mean(wins),
-              points = mean(points),
+              points = mean(pf),
               playoffs = mean(playoffs)) %>%
     arrange(-playoffs)
 

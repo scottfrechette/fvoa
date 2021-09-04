@@ -19,8 +19,7 @@ calculate_fvoa_season <- function(scores) {
 
   for (i in 1:n_distinct(scores$week)) {
 
-    scores_tmp <- scores %>%
-      filter(week %in% 1:i)
+    scores_tmp <- filter(scores, week %in% 1:i)
     fvoa_rankings <- calculate_fvoa(scores_tmp) %>%
       mutate(week = i,
              .before = 1)
@@ -109,9 +108,11 @@ calculate_stats <- function(schedule, scores, league = "Yahoo") {
               "record", "wp", rank_col)
 }
 
-calculate_fvoa <- function(draws) {
+calculate_fvoa <- function(scores) {
 
-  draws %>%
+  fit <- fit_model(scores)
+
+  extract_draws(scores, fit) %>%
     ungroup() %>%
     mutate(avg = mean(.prediction)) %>%
     group_by(team) %>%
@@ -119,14 +120,14 @@ calculate_fvoa <- function(draws) {
               fvoa_score = mean(.prediction - avg),
               fvoa_sd = sd(.prediction - avg)) %>%
     arrange(-fvoa_score) %>%
-    select(team, fvoa = fvoa_score)
+    select(team, fvoa = fvoa_score) %>%
+    mutate(fvoa_rank = min_rank(-fvoa))
 
 }
 
-calculate_strength_schedule <- function(schedule, fvoa) {
+calculate_strength_schedule <- function(schedule, scores) {
 
-  team_col <- names(select(scores, starts_with("team")))
-  scores <- select(scores, week, team = starts_with("team"), score)
+  fvoa <- calculate_fvoa(scores)
 
   schedule %>%
     left_join(fvoa, by = c("team2" = "team")) %>%

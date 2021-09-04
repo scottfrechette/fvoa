@@ -13,7 +13,7 @@ scrape_schedule <- function(league, leagueID,
 
   if(league == "yahoo") {
 
-    map_df(1:17, ~ scrape_yahoo_schedule(leagueID, season, .x))
+    map_df(1:15, ~ scrape_yahoo_schedule(leagueID, .x, season))
 
   } else if (league == "espn") {
 
@@ -25,23 +25,23 @@ scrape_schedule <- function(league, leagueID,
 }
 
 #' @export
-scrape_team <- function(league, leagueID, week, season = 2020) {
+scrape_team <- function(league, leagueID, week,
+                        season = as.numeric(format(Sys.Date(),'%Y'))) {
 
   if (league == "yahoo") {
 
     scrape_yahoo_teamIDs(leagueID) %>%
       select(teamID) %>%
       pull() %>%
-      map_df(~ scrape_yahoo_team(leagueID, week, season, .x))
+      map_df(~ scrape_yahoo_team(week, .x, leagueID, season))
 
   } else if (league == "espn") {
 
     ffscrapr::espn_connect(season, leagueID) %>%
       ffscrapr::ff_starters(week = week) %>%
-      select(week, teamID = 2, team = 3, score = 4,
-             playerID = 7, player = 8, position = 9,
-             roster = 5, #projected = 4,
-             points = 6)
+      select(week, teamID = 2, #team = 3,
+             score = 4, playerID = 8, player = 9, position = 10,
+             roster = 5, projected = 7, points = 6)
 
   } else {
 
@@ -52,11 +52,13 @@ scrape_team <- function(league, leagueID, week, season = 2020) {
 }
 
 #' @export
-scrape_win_prob <- function(leagueID, week, season = 2021, league = "yahoo"){
+scrape_win_prob <- function(week, leagueID = 160225,
+                            season = as.numeric(format(Sys.Date(),'%Y')),
+                            league = "yahoo") {
 
   scrape_yahoo_teamIDs(leagueID) %>%
     crossing(week) %>%
-    mutate(prob = pmap_chr(list(week, leagueID, teamID), scrape_yahoo_winprob),
+    mutate(prob = pmap_chr(list(week, teamID, leagueID), scrape_yahoo_winprob),
            wp = str_extract(prob, "[:digit:]+"),
            wp = as.numeric(wp)/100) %>%
     select(teamID, wp)
@@ -64,7 +66,8 @@ scrape_win_prob <- function(leagueID, week, season = 2021, league = "yahoo"){
 }
 
 #' @export
-scrape_player_projections <- function(league, leagueID, week, season = 2021) {
+scrape_player_projections <- function(league, leagueID, week,
+                                      season = as.numeric(format(Sys.Date(),'%Y'))) {
 
   player_table <- ffscrapr::dp_playerids() %>%
     select(player = name, team, position, age, draft_year,
@@ -78,7 +81,7 @@ scrape_player_projections <- function(league, leagueID, week, season = 2021) {
                                            "K", "DEF", "DB", "DL"),
                               page = seq(0, 75, by = 25)) %>%
       mutate(data = map2(position, page,
-                         ~ scrape_yahoo_players(leagueID, week, .x, .y))) %>%
+                         ~ scrape_yahoo_players(week, .x, .y, leagueID))) %>%
       unnest(data) %>%
       select(yahooID = playerID, player, position, teamID) %>%
       mutate(position = if_else(position == "DEF", "DST", position),
@@ -109,7 +112,9 @@ scrape_player_projections <- function(league, leagueID, week, season = 2021) {
 
   }
 
-  return(out)
+  mutate(out,
+         teamID = as.integer(teamID),
+         mflID = as.integer(mflID))
 
 }
 
@@ -130,13 +135,13 @@ extract_projections <- function(team) {
   team_col <- names(select(team, starts_with("team")))
 
   team %>%
-    dplyr::filter(!roster %in% c("BN", "IR")) %>%
-    dplyr::select(week, team = starts_with("team"), score, proj_pts) %>%
+    dplyr::filter(!roster %in% c("BN", "IR", "BE")) %>%
+    dplyr::select(week, team = starts_with("team"), score, projected) %>%
     dplyr::group_by(week, team) %>%
-    dplyr::summarize(proj = sum(proj_pts),
-                     act = score[1],
+    dplyr::summarize(projected = sum(projected, na.rm = T),
+                     actual = score[1],
                      .groups = "drop") %>%
-    purrr::set_names("week", team_col, "proj", "act")
+    purrr::set_names("week", team_col, "projected", "actual")
 
 }
 
@@ -175,7 +180,8 @@ scrape_yahoo_teamIDs <- function(leagueID, teamID = 1:20) {
 
 }
 
-scrape_yahoo_schedule <- function(leagueID, season, week) {
+scrape_yahoo_schedule <- function(leagueID, week,
+                                  season = as.numeric(format(Sys.Date(),'%Y'))) {
 
   url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID, "?matchup_week=", week, "&module=matchups&lhst=matchups")
 
@@ -211,7 +217,9 @@ scrape_yahoo_schedule <- function(leagueID, season, week) {
 
 }
 
-scrape_yahoo_team <- function(leagueID, week, season, teamID) {
+scrape_yahoo_team <- function(week, teamID,
+                              leagueID = 160225,
+                              season = as.numeric(format(Sys.Date(),'%Y'))) {
 
   team_url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID,
                      "/matchup?week=", week, "&mid1=", teamID)
@@ -259,7 +267,8 @@ scrape_yahoo_team <- function(leagueID, week, season, teamID) {
 
 }
 
-scrape_yahoo_winprob <- function(week, leagueID, teamID) {
+scrape_yahoo_winprob <- function(week, teamID,
+                                 leagueID = 160225) {
 
   url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID,
                 "/matchup?week=", week, "&mid1=", teamID)
@@ -273,7 +282,8 @@ scrape_yahoo_winprob <- function(week, leagueID, teamID) {
 
 }
 
-scrape_yahoo_players <- function(leagueID, week, position, page) {
+scrape_yahoo_players <- function(week, position, page,
+                                 leagueID = 160225) {
 
   url <- str_glue("https://football.fantasysports.yahoo.com/f1/{leagueID}/players?status=ALL&pos={position}&cut_type=9&stat1=S_PW_{week}&myteam=0&sort=AR&sdir=1&count={page}")
 
@@ -363,7 +373,9 @@ scrape_yahoo_player_team <- function(x) {
 
 }
 
-scrape_espn_players <- function(leagueID = 299999, season = 2020, week,
+scrape_espn_players <- function(week,
+                                leagueID = 299999,
+                                season = as.numeric(format(Sys.Date(),'%Y')),
                                 pos = slot_names,
                                 projections = TRUE) {
 
@@ -413,7 +425,7 @@ scrape_espn_players <- function(leagueID = 299999, season = 2020, week,
   return(out)
 }
 
-scrape_mfl_ids <- function(season) {
+scrape_mfl_ids <- function(season = as.numeric(format(Sys.Date(),'%Y'))) {
 
   httr::GET(str_glue("https://api.myfantasyleague.com/{season}/export?TYPE=players&L=&APIKEY=&DETAILS=1&SINCE=&PLAYERS=&JSON=1")) %>%
     httr::content() %>%

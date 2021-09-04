@@ -9,7 +9,7 @@ compare_teams <- function(model, team1, team2,
   .output <- match.arg(.output)
 
   sim <- tibble(team = c(team1, team2)) %>%
-    tidybayes::add_predicted_draws(mdl, seed = 42) %>%
+    tidybayes::add_predicted_draws(model, seed = 42) %>%
     ungroup() %>%
     select(team, sim = .draw, score = .prediction) %>%
     spread(team, score) %>%
@@ -68,7 +68,7 @@ compare_teams <- function(model, team1, team2,
 compare_league <- function(scores, model) {
 
   team_sims <- distinct(scores, team) %>%
-    tidybayes::add_predicted_draws(mdl, seed = 42) %>%
+    tidybayes::add_predicted_draws(model, seed = 42) %>%
     ungroup() %>%
     select(team, score = .prediction) %>%
     nest(data = -team)

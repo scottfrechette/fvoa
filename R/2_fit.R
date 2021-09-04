@@ -11,7 +11,8 @@ fit_model <- function(scores) {
   rstanarm::stan_glm(score ~ 0 + team,
                      data = scores,
                      weights = weight,
-                     prior = rstanarm::normal(115, 20),
+                     prior = rstanarm::student_t(10, 115, 20),
+                     # prior = rstanarm::normal(115, 20),
                      seed = 42,
                      iter = 3750,
                      warmup = 1250,
@@ -65,7 +66,10 @@ weight_games <- function(x, alpha = 0.15) {
 
 extract_draws <- function(scores, model, ndraws = NULL) {
 
-  tidybayes::add_predicted_draws(distinct(scores, team), model, ndraws)
+  tidybayes::add_predicted_draws(distinct(scores, team),
+                                 model,
+                                 ndraws,
+                                 seed = 42)
 
 }
 

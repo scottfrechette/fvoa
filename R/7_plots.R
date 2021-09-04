@@ -68,7 +68,8 @@ plot_matchups <- function(all_matchups_df) {
   matchup_df %>%
     ggplot(aes(reorder(winner, -score, FUN = mean), score)) +
     geom_point(aes(color=loser)) +
-    geom_hline(yintercept=50, color="darkgrey") +
+    geom_hline(yintercept=0.5, color="darkgrey", linetype = 2) +
+    scale_y_continuous(labels = scales::percent) +
     labs(x = "", y="% Chance to Win", color="") +
     theme_bw() +
     theme(legend.position = "bottom") +
@@ -110,32 +111,29 @@ plot_matchups_hm <- function(all_matchups_df) {
   hm_df %>%
     ggplot(aes(loser, winner, fill = score)) +
     geom_tile() +
-    scale_fill_distiller(palette = "Spectral", direction=1) +
-    #scale_fill_gradient2(low=muted("red"), mid="white", high=muted("green"), midpoint=50)+
-    #scale_fill_viridis() +
+    scale_fill_distiller(palette = "Spectral", direction = 1, limits = c(0, 1)) +
     theme(panel.background=element_rect(fill="white", colour="white")) +
-    labs(x = "team 2", y="team 1", fill="% Chance", title="Chance team 1 Beats team 2")
+    labs(x = "Opponent",
+         y = "Team",
+         fill = "% Chance",
+         title = "Who are the strongest teams?")
 
 }
 
 #' @export
-plot_team_evaluation <- function(df) {
+plot_team_evaluation <- function(team) {
 
-  if(!"Proj" %in% names(df)) {
-    stop("Dataframe must include projected scores")
-  }
-
-  df %>%
-    group_by(team) %>%
-    mutate(margin = score - Proj,
+  team %>%
+    extract_projections() %>%
+    mutate(margin = actual - projected,
            sign = margin >= 0,
-           avg = mean(margin),
+           avg = mean(margin, na.rm = T),
            pos_count = sum(sign)) %>%
     ggplot(aes(x = week, y = margin, fill = sign)) +
     geom_bar(stat = "identity") +
-    facet_wrap(~reorder(team, - pos_count), ncol = n_distinct(df$team)/2) +
+    facet_wrap(~reorder(team, - pos_count), ncol = 5) +
     guides(fill = "none") +
-    labs(title = "weekly Projection v Actual Results", y = "Margin") +
+    labs(title = "Weekly Projection v Actual Results", y = "Margin") +
     theme_fvoa() +
     theme(panel.grid.major.y = element_blank())
 }
@@ -246,10 +244,12 @@ plot_playoff_leverage <- function(sim_standings) {
 }
 
 #' @export
-plot_simulation <- function(simulated_season_df, plot = c(Wins, points, Percent)) {
-  plots <- tibble(Wins = "Projected Wins by week",
-                      points = "Projected Total Points by week",
-                      Percent = "Projected Chance of Making Playoffs by week")
+plot_simulation <- function(simulated_season_df,
+                            plot = c(wins, points, playoffs)) {
+
+  plots <- tibble(wins = "Projected Wins by week",
+                  points = "Projected Total Points by week",
+                  playoffs = "Projected Chance of Making Playoffs by week")
 
   plot_quo <- enquo(plot)
 
@@ -260,7 +260,7 @@ plot_simulation <- function(simulated_season_df, plot = c(Wins, points, Percent)
     stat_smooth(se = FALSE, method="lm", linetype = 2, size=0.5, color="grey") +
     facet_wrap(~reorder(team, rank, FUN = last), ncol = 5) +
     labs(y = "Wins", x = "week",
-         title = plots %>% pull(!!plot_quo)) +
+         title = pull(plots, !!plot_quo)) +
     guides(color = "none") +
     scale_y_continuous(breaks = scales::pretty_breaks(n = 5)) +
     scale_x_continuous(breaks = c(1:15), limits = c(1, 15)) +
@@ -320,29 +320,31 @@ plot_quadrant <- function(quadrants, x = c("pf", "pa", "delta")) {
     scale_y_continuous(labels = scales::percent,
                        limits = c(0, 1),
                        expand = c(0, 0)) +
-    tidyquant::theme_tq() +
+    # tidyquant::theme_tq() +
+    theme_fvoa() +
     labs(y = "Win Percentage",
          x = x_label) +
-    tidyquant::scale_color_tq() +
+    # tidyquant::scale_color_tq() +
     guides(color = "none")
 
 }
 
 #' @export
-plot_sim_matchup <- function(sim_scores, team1, team2,
-                             week, square = FALSE) {
+plot_h2h_matchup <- function(fit, team1, team2,
+                             square = FALSE) {
 
-  sim_scores_subset <- sim_scores %>%
-    filter(team %in% c(team1, team2),
-           week == week)
+  sim_scores_subset <- extract_draws(scores, fit) %>%
+    ungroup() %>%
+    select(sim = .draw, team, score = .prediction) %>%
+    filter(team %in% c(team1, team2))
 
   lo <- min(sim_scores_subset$score) - 10
   hi <- max(sim_scores_subset$score) + 10
 
   sim_scores_final <- sim_scores_subset %>%
     spread(team, score) %>%
-    select(1:2, team1, team2) %>%
-    mutate(winner = .[[3]] > .[[4]])
+    select(sim, tm1 = !!team1, tm2 = !!team2) %>%
+    mutate(winner = tm1 > tm2)
 
   wp <- sim_scores_final %>%
     summarize(team1 = sum(winner) / n()) %>%
@@ -350,12 +352,14 @@ plot_sim_matchup <- function(sim_scores, team1, team2,
     mutate_all(~ paste0(round(.x, 2) * 100, "%"))
 
   p <- sim_scores_final %>%
-    ggplot(aes(.[[3]], .[[4]], color = winner)) +
-    geom_point(alpha = 0.5) +
+    ggplot(aes(tm1, tm2, color = winner)) +
+    geom_point(alpha = 0.1) +
     geom_abline(color = "grey30", linetype = 2) +
     guides(color = "none") +
-    labs(x = str_glue(team1, " ({wp[[1]]})"),
-         y = str_glue(team2, " ({wp[[2]]})"))
+    labs(x = str_glue(team1, " Simulated Scores \n(Win Probability: {wp[[1]]})"),
+         y = str_glue(team2, " Simulated Scores \n(Win Probability: {wp[[2]]})")) +
+         # y = str_glue(team2, " ({wp[[2]]})")) +
+    theme_fvoa()
 
   if (square) {
 
@@ -376,7 +380,7 @@ plot_exp_wpct <- function(scores, schedule) {
   # pythagorean or other?
 
   schedule %>%
-    filter(week < 2) %>%
+    # filter(week < 2) %>%
     mutate_at(vars(team1, team2), as.character) %>%
     inner_join(scores %>%
                  rename(t1_points = score),
@@ -413,22 +417,72 @@ plot_exp_wpct <- function(scores, schedule) {
 }
 
 #' @export
-plot_pos_contribution <- function(teams, team = NULL, season = F, group = c("team", "Position")) {
+plot_wpag <- function(scores, schedule) {
+
+  left_join(rename(scores, team1 = team, score1 = score),
+            rename(scores, team2 = team, score2 = score),
+            by = "week") %>%
+    filter(team1 != team2) %>%
+    left_join(mutate(schedule, scheduled = T),
+              by = c("week", "team1", "team2")) %>%
+    replace_na(list(scheduled = FALSE)) %>%
+    mutate(win = score1 > score2,
+           scheduled_win = scheduled & win) %>%
+    group_by(team1) %>%
+    summarize(scheduled = sum(scheduled),
+              scheduled_wins = sum(scheduled_win),
+              possible = n(),
+              possible_wins = sum(win)) %>%
+    mutate(scheduled_wp = scheduled_wins / scheduled,
+           possible_wp = possible_wins / possible) %>%
+    ggplot(aes(scheduled_wp, possible_wp, label = team1)) +
+    ggrepel::geom_text_repel() +
+    geom_point() +
+    scale_x_continuous(labels = scales::percent_format(accuracy = 1),
+                       limits = c(0, 1), expand = c(0, 0)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                       limits = c(0, 1), expand = c(0, 0)) +
+    geom_abline(linetype = 2) +
+    annotate("text",
+             x = 0.1,
+             y = 0.9,
+             size = 8,
+             label = "Unlucky",
+             color = "grey65") +
+    annotate("text",
+             x = 0.9,
+             y = 0.2,
+             size = 8,
+             label = "Lucky",
+             color = "grey65") +
+    labs(x = "Win Percentage",
+         y = "Win Percentage All Games",
+         title = "Comparison of Win Percentage and Win Percentage of All Possible Games") +
+    theme_fvoa() +
+    theme(panel.grid.major.y = element_blank())
+
+}
+
+#' @export
+plot_pos_contribution <- function(teams,
+                                  team = NULL,
+                                  season = F,
+                                  group = c("team", "Position")) {
 
   if(season) {
 
     if(group[1] == "Position") {
 
       teams %>%
-        filter(!Lineup %in% c("BN", "IR"), week < 16) %>%
+        filter(!roster %in% c("BN", "IR", "BE"), week < 16) %>%
         mutate(Position = case_when(
-          Position %in% c("CB", "S", "DB") ~ "DB",
-          Position %in% c("DE", "DT", "DL", "LB") ~ "DL",
-          TRUE ~ Position) %>%
+          position %in% c("CB", "S", "DB") ~ "DB",
+          position %in% c("DE", "DT", "DL", "LB") ~ "DL",
+          TRUE ~ position) %>%
             fct_relevel("QB", "RB", "WR", "TE",
-                        "DEF", "K", "DB", "DL")) %>%
+                        "DST", "K", "DB", "DL")) %>%
         group_by(team, Position) %>%
-        summarize(Points = sum(Points)) %>%
+        summarize(Points = sum(points)) %>%
         mutate(Pct = Points / sum(Points)) %>%
         ungroup() %>%
         ggplot(aes(team, Pct, fill = Pct)) +
@@ -441,15 +495,16 @@ plot_pos_contribution <- function(teams, team = NULL, season = F, group = c("tea
     } else {
 
       teams %>%
-        filter(!Lineup %in% c("BN", "IR"), week < 16) %>%
+        filter(!roster %in% c("BN", "IR", "BE"),
+               week < 16) %>%
         mutate(Position = case_when(
-          Position %in% c("CB", "S", "DB") ~ "DB",
-          Position %in% c("DE", "DT", "DL", "LB") ~ "DL",
-          TRUE ~ Position) %>%
+          position %in% c("CB", "S", "DB") ~ "DB",
+          position %in% c("DE", "DT", "DL", "LB") ~ "DL",
+          TRUE ~ position) %>%
             fct_relevel("QB", "RB", "WR", "TE",
-                        "DEF", "K", "DB", "DL")) %>%
+                        "DST", "K", "DB", "DL")) %>%
         group_by(team, Position) %>%
-        summarize(Points = sum(Points)) %>%
+        summarize(Points = sum(points)) %>%
         mutate(Pct = Points / sum(Points)) %>%
         ungroup() %>%
         ggplot(aes(Position, Pct, fill = Pct)) +
