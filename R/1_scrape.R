@@ -2,20 +2,21 @@
 # Main Functions ----------------------------------------------------------
 
 #' @export
-scrape_schedule <- function(league, leagueID,
+scrape_schedule <- function(league = c("espn", "yahoo"),
+                            leagueID = NULL,
                             season = as.numeric(format(Sys.Date(),'%Y'))) {
 
-  league <- tolower(league)
-
-  stopifnot(league %in% c("espn", "yahoo"),
-            is.numeric(leagueID)
-  )
+  league <- match.arg(league)
 
   if(league == "yahoo") {
+
+    if(is.null(leagueID)) leagueID <- 160225
 
     map_df(1:15, ~ scrape_yahoo_schedule(leagueID, .x, season))
 
   } else if (league == "espn") {
+
+    if(is.null(leagueID)) leagueID <- 299999
 
     ffscrapr::espn_connect(season, leagueID) %>%
       ffscrapr::ff_schedule() %>%
@@ -25,10 +26,16 @@ scrape_schedule <- function(league, leagueID,
 }
 
 #' @export
-scrape_team <- function(league, leagueID, week,
+scrape_team <- function(week,
+                        league = c("espn", "yahoo"),
+                        leagueID = NULL,
                         season = as.numeric(format(Sys.Date(),'%Y'))) {
 
+  league <- match.arg(league)
+
   if (league == "yahoo") {
+
+    if(is.null(leagueID)) leagueID <- 160225
 
     scrape_yahoo_teamIDs(leagueID) %>%
       select(teamID) %>%
@@ -36,6 +43,8 @@ scrape_team <- function(league, leagueID, week,
       map_df(~ scrape_yahoo_team(week, .x, leagueID, season))
 
   } else if (league == "espn") {
+
+    if(is.null(leagueID)) leagueID <- 299999
 
     ffscrapr::espn_connect(season, leagueID) %>%
       ffscrapr::ff_starters(week = week) %>%
@@ -52,9 +61,14 @@ scrape_team <- function(league, leagueID, week,
 }
 
 #' @export
-scrape_win_prob <- function(week, leagueID = 160225,
-                            season = as.numeric(format(Sys.Date(),'%Y')),
-                            league = "yahoo") {
+scrape_win_prob <- function(week,
+                            league = "yahoo",
+                            leagueID = NULL,
+                            season = as.numeric(format(Sys.Date(),'%Y'))) {
+
+  league <- match.arg(league)
+
+  if(is.null(leagueID)) leagueID <- 160225
 
   scrape_yahoo_teamIDs(leagueID) %>%
     crossing(week) %>%
@@ -66,8 +80,12 @@ scrape_win_prob <- function(week, leagueID = 160225,
 }
 
 #' @export
-scrape_player_projections <- function(league, leagueID, week,
+scrape_player_projections <- function(week,
+                                      league = c("espn", "yahoo"),
+                                      leagueID = NULL,
                                       season = as.numeric(format(Sys.Date(),'%Y'))) {
+
+  league <- match.arg(league)
 
   player_table <- ffscrapr::dp_playerids() %>%
     select(player = name, team, position, age, draft_year,
@@ -76,6 +94,8 @@ scrape_player_projections <- function(league, leagueID, week,
     bind_rows(defenseIDs)
 
   if (league == "yahoo") {
+
+    if(is.null(leagueID)) leagueID <- 160225
 
     yahoo_players <- crossing(position = c("QB", "RB", "WR", "TE",
                                            "K", "DEF", "DB", "DL"),
@@ -91,6 +111,8 @@ scrape_player_projections <- function(league, leagueID, week,
       inner_join(select(player_table, yahooID, mflID), by = "yahooID")
 
   } else if (league == "espn") {
+
+    if(is.null(leagueID)) leagueID <- 299999
 
     conn <- ffscrapr::espn_connect(season = season, league_id = leagueID)
 
