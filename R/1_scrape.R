@@ -395,10 +395,42 @@ scrape_yahoo_player_team <- function(x) {
 
 }
 
+slot_name_to_id <- function(x) {
+  dplyr::case_when(
+    x == "QB" ~ 0L,
+    x == "TQB" ~ 1L, # team quarterback
+    x == "RB" ~ 2L,
+    x == "RB/WR" ~ 3L,
+    x == "WR" ~ 4L,
+    x == "WR/TE" ~ 5L,
+    x == "TE" ~ 6L,
+    x == "OP" ~ 7L, # offensive player
+    x == "DT" ~ 8L,
+    x == "DE" ~ 9L,
+    x == "LB" ~ 10L,
+    x == "DL" ~ 11L,
+    x == "CB" ~ 12L,
+    x == "S" ~ 13L,
+    x == "DB" ~ 14L,
+    x == "DP" ~ 15L, # defensive player
+    x == "DST" ~ 16L,
+    x == "K" ~ 17L,
+    x == "P" ~ 18L,
+    x == "HC" ~ 19L, # head coach
+    x == "FLEX" ~ 23L,
+    x == "EDR" ~ 24L,
+    TRUE ~ NA_integer_
+  )
+}
+
 scrape_espn_players <- function(week,
                                 leagueID = 299999,
                                 season = as.numeric(format(Sys.Date(),'%Y')),
-                                pos = slot_names,
+                                pos = c("QB", "TQB", "RB", "RB/WR", "WR",
+                                        "WR/TE", "TE", "OP",
+                                        "DT", "DE", "LB", "DL", "CB",
+                                        "S", "DB", "DP", "DST",
+                                        "K", "P", "HC", "FLEX", "EDR"),
                                 projections = TRUE) {
 
   conn <- ffscrapr::espn_connect(season = season, league_id = leagueID)
