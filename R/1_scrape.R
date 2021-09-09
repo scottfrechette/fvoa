@@ -122,8 +122,7 @@ scrape_player_projections <- function(week,
       select(espnID = 1, player = 2, position = 3) %>%
       left_join(ffscrapr::ff_rosters(conn, week = week) %>%
                   select(teamID = 1, espnID = 3),
-                by = "espnID") %>%
-      replace_na(list(teamID = "FA"))
+                by = "espnID")
 
     out <- espn_players %>%
       inner_join(select(player_table, espnID, mflID), by = "espnID")
