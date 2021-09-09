@@ -2,9 +2,22 @@
 # Main Functions ----------------------------------------------------------
 
 #' @export
+<<<<<<< HEAD:R/4_compare.R
 compare_teams <- function(model, team1, team2,
                           .output = c("prob", "odds", "spread"),
                           .verbose = FALSE) {
+=======
+compare_teams <- function(scores,
+                          team1,
+                          team2,
+                          .fun = simulate_score,
+                          .output = c("prob", "odds", "spread", "over_under", "plot"),
+                          .verbose = FALSE,
+                          .interactive = FALSE,
+                          ...) {
+
+  set.seed(42)
+>>>>>>> master:R/compare.R
 
   .output <- match.arg(.output)
 
@@ -60,9 +73,54 @@ compare_teams <- function(model, team1, team2,
                       if_else(spread < 0, paste(spread), paste(0)))
     return(spread)
 
+  }  else if (.output == "over_under") {
+
+    ou <- round(mean(t1_sim + t2_sim))
+
+    return(ou)
+
+  } else if (.output == "plot") {
+
+    tbl <- tibble(t1 = sample(t1_sim, 10000),
+                  t2 = sample(t2_sim, 10000)) %>%
+      mutate(winner = if_else(t1 > t2, team1, team2)) %>%
+      add_count(winner) %>%
+      mutate(prop = scales::percent(n / 10000, accuracy = 0.1))
+
+    p <- tbl %>%
+      ggplot(aes(t1, t2, color = factor(winner),
+                 text = str_glue("{team1}: {t1}\n{team2}: {t2}"))) +
+      geom_point(alpha = 0.3) +
+      scale_x_continuous(limits = c(min(tbl$t1) - 2, max(tbl$t1) + 2),
+                         expand = c(0, NA)) +
+      scale_y_continuous(limits = c(min(tbl$t2) - 2, max(tbl$t2) + 2),
+                         expand = c(0, NA)) +
+      labs(x = str_glue("Simulated points: {team1}"),
+           y = str_glue("Simulated points:  {team2}"),
+           color = "Winner") +
+      annotate("text",
+               x = min(tbl$t1) + ((max(tbl$t1) - min(tbl$t1)) * 0.85),
+               y = min(tbl$t1) + ((max(tbl$t2) - min(tbl$t2)) * 0.15),
+               size = 5,
+               label = str_glue("{team1} better {unique(tbl[tbl$winner == team1,]$prop)}")) +
+      annotate("text",
+               y = min(tbl$t1) + ((max(tbl$t1) - min(tbl$t1)) * 0.85),
+               x = min(tbl$t1) + ((max(tbl$t2) - min(tbl$t2)) * 0.15),
+               size = 5,
+               label = str_glue("{team2} better {unique(tbl[tbl$winner == team2,]$prop)}")) +
+      theme_fvoa() +
+      theme(legend.position = "none",
+            legend.key = element_blank(),
+            panel.grid.major.y = element_blank())
+
+    if(.interactive) p <- plotly::ggplotly(p, tooltip = "text") %>% plotly::config(displayModeBar = F)
+
+    return(p)
+
   } else {NA}
 
 }
+
 
 #' @export
 compare_league <- function(scores, model) {
@@ -87,8 +145,26 @@ compare_league <- function(scores, model) {
 #' @export
 compare_current_matchups <- function(scores,
                                      schedule,
+<<<<<<< HEAD:R/4_compare.R
                                      model,
                                      win_prob = NULL) {
+=======
+                                     current_week,
+                                     win_prob = NULL,
+                                     leverage = NULL,
+                                     .fun = simulate_score,
+                                     ...) {
+
+  set.seed(42)
+
+  scores <- select(scores, week, team = starts_with("team"), score)
+
+  if("team" %in% names(schedule) | "teamID" %in% names(schedule)) {
+    schedule <- spread_schedule(schedule)
+  }
+
+  schedule <- doublewide_schedule(schedule)
+>>>>>>> master:R/compare.R
 
   cutoff <- length(unique(scores$team)) / 2
 
@@ -101,23 +177,63 @@ compare_current_matchups <- function(scores,
     mutate(Line = map_chr(fvoa_wp, prob_to_odds),
            fvoa_wp = round(fvoa_wp/100, 2) %>% format_pct,
            Spread = map2_chr(team1, team2,
+<<<<<<< HEAD:R/4_compare.R
                              ~compare_teams(model, team1 = .x, team2 = .y,
                                             .output = "spread"))) %>%
+=======
+                             compare_teams,
+                             scores = scores,
+                             .output = "spread",
+                             ...),
+           OU = map2_dbl(team1, team2,
+                             compare_teams,
+                             scores = scores,
+                             .output = "over_under",
+                             ...)) %>%
+>>>>>>> master:R/compare.R
     select(Winner = team1,
            Loser = team2,
-           FVOA = fvoa_wp,
+           `Win%` = fvoa_wp,
            Spread,
-           Line)
+           Line,
+           `O/U` = OU)
 
   if(!is.null(win_prob)) {
     current_matchups <- current_matchups %>%
       left_join(win_prob %>%
-                  rename(Yahoo = wp),
+                  rename(`Yahoo Win%` = wp),
                 by = c("Winner" = "team")) %>%
       select(Winner, Loser,
-             FVOA, Yahoo,
+             `FVOA Win%` = `Win%`,
+             `Yahoo Win%`,
              Spread,
-             Line)
+             Line,
+             `O/U`)
+  }
+
+  if(!is.null(leverage)) {
+
+    leverage_tmp <- select(leverage, team = starts_with("team"), sim:weeks_played)
+
+    team_leverage <- leverage_tmp %>%
+      group_by(team, leverage_win) %>%
+      dplyr::summarize(playoffs = mean(playoffs),
+                .groups = "drop") %>%
+      mutate(leverage_win = if_else(leverage_win == 1, "Win", "Lose")) %>%
+      spread(leverage_win, playoffs) %>%
+      mutate(leverage = Win - Lose) %>%
+      select(team, leverage)
+
+    current_matchups <- current_matchups %>%
+      left_join(team_leverage %>%
+                  rename(Winner = team, leverage_w = leverage),
+                by = "Winner") %>%
+      left_join(team_leverage %>%
+                  rename(Loser = team, leverage_l = leverage),
+                by = "Loser") %>%
+      mutate(Leverage = format_pct(leverage_w + leverage_l, accuracy = 0)) %>%
+      select(-leverage_w, -leverage_l)
+
   }
 
   current_matchups

@@ -214,6 +214,7 @@ plot_matchups_hm <- function(all_matchups_df) {
 
 #' @export
 plot_playoff_leverage <- function(sim_standings) {
+<<<<<<< HEAD:R/7_plots.R
 
   library(patchwork)
 
@@ -222,6 +223,17 @@ plot_playoff_leverage <- function(sim_standings) {
   leverage_plot <- sim_standings %>%
     group_by(team, leverage_win) %>%
     summarize(playoffs = mean(playoffs),
+=======
+
+  current_week <- unique(sim_standings$weeks_played) + 1
+
+  sim_standings_tmp <- select(sim_standings, team = starts_with("team"), sim:weeks_played)
+
+  sim_standings_tmp %>%
+    rename(team = 1) %>%
+    group_by(team, leverage_win) %>%
+    dplyr::summarize(playoffs = mean(playoffs),
+>>>>>>> master:R/plots.R
               .groups = "drop") %>%
     mutate(leverage_win = if_else(leverage_win == 1, "Win", "Lose")) %>%
     spread(leverage_win, playoffs) %>%
@@ -234,14 +246,25 @@ plot_playoff_leverage <- function(sim_standings) {
     geom_text(aes(y = Total + 0.005,
                   label = scales::percent(delta, accuracy = 1)),
               color = "grey30", hjust = 0) +
+<<<<<<< HEAD:R/7_plots.R
+=======
+    # geom_text(aes(label = paste0(delta, "%"), group = team), color = "grey30", nudge_y = 5) +
+>>>>>>> master:R/plots.R
     scale_y_continuous(labels = scales::percent,
                        limits = c(0, 1.05),
                        expand = c(0, NA),
                        breaks = c(0, .25, .50, .75, 1)) +
+<<<<<<< HEAD:R/7_plots.R
     guides(fill = "none") +
     labs(x = NULL,
          y = NULL,
          title = str_glue("Playoff Probability Leverage (Week {leverage_week})")) +
+=======
+    guides(fill = FALSE) +
+    labs(x = "",
+         y = "Chance to Make Playoffs",
+         title = str_glue("Playoff Probability Leverage (Week {current_week})")) +
+>>>>>>> master:R/plots.R
     coord_flip() +
     theme(plot.title = element_text(hjust = 0.5, size = 28, face = "bold"),
           axis.text.x = element_text(size = 12, color = "grey"),
@@ -346,25 +369,29 @@ plot_quadrant <- function(quadrants, x = c("pf", "pa", "delta")) {
     geom_vline(xintercept = x_intercept) +
     annotate("text",
              x = (max(quadrants$x_axis) - x_intercept) / 2 + x_intercept,
-             y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
+             # y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
+             y = 0.75,
              size = 8,
              label = "Good",
              color = "grey65") +
     annotate("text",
              x = (max(quadrants$x_axis) - x_intercept) / 2 + x_intercept,
-             y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
+             # y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
+             y = 0.25,
              size = 8,
              label = "Unlucky",
              color = "grey65") +
     annotate("text",
              x = x_intercept - (x_intercept - min(quadrants$x_axis)) / 2,
-             y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
+             # y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
+             y = 0.75,
              size = 8,
              label = "Lucky",
              color = "grey65") +
     annotate("text",
              x = x_intercept - (x_intercept - min(quadrants$x_axis)) / 2,
-             y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
+             # y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
+             y = 0.25,
              size = 8,
              label = "Bad",
              color = "grey65") +
@@ -372,12 +399,60 @@ plot_quadrant <- function(quadrants, x = c("pf", "pa", "delta")) {
     scale_y_continuous(labels = scales::percent,
                        limits = c(0, 1),
                        expand = c(0, 0)) +
+<<<<<<< HEAD:R/7_plots.R
     # tidyquant::theme_tq() +
     theme_fvoa() +
     labs(y = "Win Percentage",
          x = x_label) +
     # tidyquant::scale_color_tq() +
     guides(color = "none")
+=======
+    theme_fvoa() +
+    theme(panel.grid.major.y = element_blank()) +
+    labs(y = "Win Percentage",
+         x = x_label) +
+    guides(color = F)
+
+}
+
+#' @export
+plot_sim_matchup <- function(sim_scores, team1, team2,
+                             week, square = FALSE) {
+
+  sim_scores_subset <- sim_scores %>%
+    filter(team %in% c(team1, team2),
+           week == week)
+
+  lo <- min(sim_scores_subset$score) - 10
+  hi <- max(sim_scores_subset$score) + 10
+
+  sim_scores_final <- sim_scores_subset %>%
+    spread(team, score) %>%
+    select(1:2, team1, team2) %>%
+    mutate(winner = .[[3]] > .[[4]])
+
+  wp <- sim_scores_final %>%
+    summarize(team1 = sum(winner) / n()) %>%
+    mutate(team2 = 1 - team1) %>%
+    mutate_all(~ paste0(round(.x, 2) * 100, "%"))
+
+  p <- sim_scores_final %>%
+    ggplot(aes(.[[3]], .[[4]], color = winner)) +
+    geom_point(alpha = 0.5) +
+    geom_abline(color = "grey30", linetype = 2) +
+    guides(color = FALSE) +
+    labs(x = str_glue(team1, " ({wp[[1]]})"),
+         y = str_glue(team2, " ({wp[[2]]})"))
+
+  if (square) {
+
+    p <- p +
+      coord_cartesian(xlim = c(lo, hi), ylim = c(lo, hi))
+
+  }
+
+  p
+>>>>>>> master:R/plots.R
 
 }
 
