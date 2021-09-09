@@ -9,7 +9,8 @@ theme_fvoa <- function(base_size = 12, base_family = "Helvetica") {
         strip.text = element_text(size =12))
 }
 
-# Plot functions
+
+# Weekly ------------------------------------------------------------------
 
 #' @export
 plot_scores <- function(scores, x = week, y = score, group = team) {
@@ -30,6 +31,72 @@ plot_scores <- function(scores, x = week, y = score, group = team) {
     stat_smooth(se = FALSE, method="lm", linetype = 2, size=0.5, color="grey") +
     theme_fvoa()
 }
+
+#' @export
+plot_fvoa <- function(fvoa_df, x = week, y = fvoa, group = team) {
+
+  x_quo <- enquo(x)
+  y_quo <- enquo(y)
+  group_quo <-enquo(group)
+
+  fvoa_df %>%
+    ggplot(aes(!!x_quo, !!y_quo, color = !!group_quo)) +
+    geom_smooth(se=F, color = "darkgrey",
+                # n = n_distinct(!!x_quo),
+                linetype=2, formula = y ~ x, method = "loess") +
+    geom_line(alpha = 0.5, size = 1.5) +
+    geom_point() +
+    # scale_y_continuous(breaks = pretty_breaks(n = 5)) +
+    scale_y_continuous(breaks = c(-100, -75, -50, -25, 0, 25, 50, 75, 100), limits = c(-100, 100)) +
+    scale_x_continuous(breaks = c(1:15), limits = c(1, 15)) +
+    labs(y = "FVOA", x = "week", title = "weekly FVOA") +
+    guides(color = "none") +
+    theme_fvoa()
+}
+
+#' @export
+plot_simulation <- function(simulated_season_df,
+                            plot = c(wins, points, playoffs)) {
+
+  plots <- tibble(wins = "Projected Wins by week",
+                  points = "Projected Total Points by week",
+                  playoffs = "Projected Chance of Making Playoffs by week")
+
+  plot_quo <- enquo(plot)
+
+  simulated_season_df %>%
+    ggplot(aes(week, !!plot_quo, color = team)) +
+    geom_line(size=1.5) +
+    geom_point(size = 2) +
+    stat_smooth(se = FALSE, method="lm", linetype = 2, size=0.5, color="grey") +
+    facet_wrap(~reorder(team, rank, FUN = last), ncol = 5) +
+    labs(y = "Wins", x = "week",
+         title = pull(plots, !!plot_quo)) +
+    guides(color = "none") +
+    scale_y_continuous(breaks = scales::pretty_breaks(n = 5)) +
+    scale_x_continuous(breaks = c(1:15), limits = c(1, 15)) +
+    theme_fvoa()
+}
+
+#' @export
+plot_manager_evaluation <- function(team) {
+
+  team %>%
+    extract_projections() %>%
+    mutate(margin = actual - projected,
+           sign = margin >= 0,
+           avg = mean(margin, na.rm = T),
+           pos_count = sum(sign)) %>%
+    ggplot(aes(x = week, y = margin, fill = sign)) +
+    geom_bar(stat = "identity") +
+    facet_wrap(~reorder(team, - pos_count), ncol = 5) +
+    guides(fill = "none") +
+    labs(title = "Weekly Projection v Actual Results", y = "Margin") +
+    theme_fvoa() +
+    theme(panel.grid.major.y = element_blank())
+}
+
+# Teams -------------------------------------------------------------------
 
 #' @export
 plot_boxplots <- function(scores, score = score, team = team) {
@@ -56,60 +123,83 @@ plot_joy_plots <- function(scores, score = score, team = team) {
 }
 
 #' @export
+plot_h2h_matchup <- function(fit, team1, team2,
+                             square = FALSE) {
+
+  sim_scores_subset <- extract_draws(scores, fit) %>%
+    ungroup() %>%
+    select(sim = .draw, team, score = .prediction) %>%
+    filter(team %in% c(team1, team2))
+
+  lo <- min(sim_scores_subset$score) - 10
+  hi <- max(sim_scores_subset$score) + 10
+
+  sim_scores_final <- sim_scores_subset %>%
+    spread(team, score) %>%
+    select(sim, tm1 = !!team1, tm2 = !!team2) %>%
+    mutate(winner = tm1 > tm2)
+
+  wp <- sim_scores_final %>%
+    summarize(team1 = sum(winner) / n()) %>%
+    mutate(team2 = 1 - team1) %>%
+    mutate_all(~ paste0(round(.x, 2) * 100, "%"))
+
+  p <- sim_scores_final %>%
+    ggplot(aes(tm1, tm2, color = winner)) +
+    geom_point(alpha = 0.1) +
+    geom_abline(color = "grey30", linetype = 2) +
+    guides(color = "none") +
+    labs(x = str_glue(team1, " Simulated Scores \n(Win Probability: {wp[[1]]})"),
+         y = str_glue(team2, " Simulated Scores \n(Win Probability: {wp[[2]]})")) +
+    # y = str_glue(team2, " ({wp[[2]]})")) +
+    theme_fvoa()
+
+  if (square) {
+
+    p <- p +
+      coord_cartesian(xlim = c(lo, hi), ylim = c(lo, hi))
+
+  }
+
+  p
+
+}
+
+#' @export
 plot_matchups <- function(all_matchups_df) {
 
   matchup_df <- all_matchups_df %>%
-    rename(winner = team) %>%
-    gather(loser, score, -winner) %>%
+    select(winner = team1, loser = team2, wp) %>%
+    # rename(winner = team) %>%
+    # gather(loser, score, -winner) %>%
     mutate(winner = as_factor(winner) %>%
              fct_rev(),
            loser = as_factor(loser))
 
   matchup_df %>%
-    ggplot(aes(reorder(winner, -score, FUN = mean), score)) +
-    geom_point(aes(color=loser)) +
-    geom_hline(yintercept=0.5, color="darkgrey", linetype = 2) +
+    ggplot(aes(reorder(winner, -wp, FUN = mean), wp)) +
+    geom_point(aes(color = loser)) +
+    geom_hline(yintercept = 0.5, color = "darkgrey", linetype = 2) +
     scale_y_continuous(labels = scales::percent) +
-    labs(x = "", y="% Chance to Win", color="") +
+    labs(x = "", y = "% Chance to Win", color = "") +
     theme_bw() +
     theme(legend.position = "bottom") +
     guides(colour = guide_legend(nrow = 1))
 }
 
 #' @export
-plot_fvoa <- function(fvoa_df, x = week, y = fvoa, group = team) {
-
-  x_quo <- enquo(x)
-  y_quo <- enquo(y)
-  group_quo <-enquo(group)
-
-  fvoa_df %>%
-    ggplot(aes(!!x_quo, !!y_quo, color = !!group_quo)) +
-    geom_smooth(se=F, color = "darkgrey",
-                # n = n_distinct(!!x_quo),
-                linetype=2, formula = y ~ x, method = "loess") +
-    geom_line(alpha = 0.5, size = 1.5) +
-    geom_point() +
-    # scale_y_continuous(breaks = pretty_breaks(n = 5)) +
-    scale_y_continuous(breaks = c(-100, -75, -50, -25, 0, 25, 50, 75, 100), limits = c(-100, 100)) +
-    scale_x_continuous(breaks = c(1:15), limits = c(1, 15)) +
-    labs(y = "FVOA", x = "week", title = "weekly FVOA") +
-    guides(color = "none") +
-    theme_fvoa()
-}
-
-#' @export
 plot_matchups_hm <- function(all_matchups_df) {
 
   hm_df <- all_matchups_df %>%
-    rename(winner = team) %>%
-    gather(loser, score, -winner) %>%
+    select(winner = team1, loser = team2, wp) %>%
+    # rename(winner = team) %>%
+    # gather(loser, score, -winner) %>%
     mutate(winner = as_factor(winner) %>%
              fct_rev(),
            loser = as_factor(loser))
 
   hm_df %>%
-    ggplot(aes(loser, winner, fill = score)) +
+    ggplot(aes(loser, winner, fill = wp)) +
     geom_tile() +
     scale_fill_distiller(palette = "Spectral", direction = 1, limits = c(0, 1)) +
     theme(panel.background=element_rect(fill="white", colour="white")) +
@@ -120,23 +210,7 @@ plot_matchups_hm <- function(all_matchups_df) {
 
 }
 
-#' @export
-plot_team_evaluation <- function(team) {
 
-  team %>%
-    extract_projections() %>%
-    mutate(margin = actual - projected,
-           sign = margin >= 0,
-           avg = mean(margin, na.rm = T),
-           pos_count = sum(sign)) %>%
-    ggplot(aes(x = week, y = margin, fill = sign)) +
-    geom_bar(stat = "identity") +
-    facet_wrap(~reorder(team, - pos_count), ncol = 5) +
-    guides(fill = "none") +
-    labs(title = "Weekly Projection v Actual Results", y = "Margin") +
-    theme_fvoa() +
-    theme(panel.grid.major.y = element_blank())
-}
 
 #' @export
 plot_playoff_leverage <- function(sim_standings) {
@@ -243,29 +317,7 @@ plot_playoff_leverage <- function(sim_standings) {
 
 }
 
-#' @export
-plot_simulation <- function(simulated_season_df,
-                            plot = c(wins, points, playoffs)) {
 
-  plots <- tibble(wins = "Projected Wins by week",
-                  points = "Projected Total Points by week",
-                  playoffs = "Projected Chance of Making Playoffs by week")
-
-  plot_quo <- enquo(plot)
-
-  simulated_season_df %>%
-    ggplot(aes(week, !!plot_quo, color = team)) +
-    geom_line(size=1.5) +
-    geom_point(size = 2) +
-    stat_smooth(se = FALSE, method="lm", linetype = 2, size=0.5, color="grey") +
-    facet_wrap(~reorder(team, rank, FUN = last), ncol = 5) +
-    labs(y = "Wins", x = "week",
-         title = pull(plots, !!plot_quo)) +
-    guides(color = "none") +
-    scale_y_continuous(breaks = scales::pretty_breaks(n = 5)) +
-    scale_x_continuous(breaks = c(1:15), limits = c(1, 15)) +
-    theme_fvoa()
-}
 
 #' @export
 plot_quadrant <- function(quadrants, x = c("pf", "pa", "delta")) {
@@ -326,49 +378,6 @@ plot_quadrant <- function(quadrants, x = c("pf", "pa", "delta")) {
          x = x_label) +
     # tidyquant::scale_color_tq() +
     guides(color = "none")
-
-}
-
-#' @export
-plot_h2h_matchup <- function(fit, team1, team2,
-                             square = FALSE) {
-
-  sim_scores_subset <- extract_draws(scores, fit) %>%
-    ungroup() %>%
-    select(sim = .draw, team, score = .prediction) %>%
-    filter(team %in% c(team1, team2))
-
-  lo <- min(sim_scores_subset$score) - 10
-  hi <- max(sim_scores_subset$score) + 10
-
-  sim_scores_final <- sim_scores_subset %>%
-    spread(team, score) %>%
-    select(sim, tm1 = !!team1, tm2 = !!team2) %>%
-    mutate(winner = tm1 > tm2)
-
-  wp <- sim_scores_final %>%
-    summarize(team1 = sum(winner) / n()) %>%
-    mutate(team2 = 1 - team1) %>%
-    mutate_all(~ paste0(round(.x, 2) * 100, "%"))
-
-  p <- sim_scores_final %>%
-    ggplot(aes(tm1, tm2, color = winner)) +
-    geom_point(alpha = 0.1) +
-    geom_abline(color = "grey30", linetype = 2) +
-    guides(color = "none") +
-    labs(x = str_glue(team1, " Simulated Scores \n(Win Probability: {wp[[1]]})"),
-         y = str_glue(team2, " Simulated Scores \n(Win Probability: {wp[[2]]})")) +
-         # y = str_glue(team2, " ({wp[[2]]})")) +
-    theme_fvoa()
-
-  if (square) {
-
-    p <- p +
-      coord_cartesian(xlim = c(lo, hi), ylim = c(lo, hi))
-
-  }
-
-  p
 
 }
 
@@ -463,6 +472,69 @@ plot_wpag <- function(scores, schedule) {
 
 }
 
+# Model Check -------------------------------------------------------------
+
+#' @export
+plot_model_eval_weekly <- function(evaluation_df) {
+
+  n_teams <- n_distinct(select(evaluation_df, starts_with("team")))
+  benchmark <- n_teams^2 - n_teams
+
+  evaluation_df %>%
+    group_by(week) %>%
+    summarise(weekly = sum(correct),
+              delta = weekly - benchmark/2,
+              percent = round(weekly/benchmark * 100, 1),
+              sign = ifelse(delta > 0, "positive",
+                            ifelse(delta < 0, "negative", "equal")),
+              .groups = "drop") %>%
+    ggplot(aes(week, delta, fill = sign, label = percent)) +
+    geom_bar(stat = 'identity') +
+    geom_text(size = 3, alpha = 0.7) +
+    scale_x_continuous(name = "week", breaks = 2:max(evaluation_df$week)) +
+    scale_y_continuous(limits = c(0-benchmark/2, benchmark/2),
+                       breaks = c(0-benchmark/2,
+                                  ((0-benchmark/2)/2),
+                                  0,
+                                  benchmark/4,
+                                  benchmark/2),
+                       labels = c(0, 25, 50, 75, 100)) +
+    scale_fill_manual(values = c(equal = "#619CFF",
+                                 negative = "#F8766D",
+                                 positive = "#00BA38")) +
+    labs(title = "Weekly Evaluation of Model",
+         x = "Week (starting with week 2)",
+         y = "Percent Correct") +
+    theme(panel.background= element_blank(),
+          panel.border = element_blank()) +
+    guides(fill = "none")
+}
+
+#' @export
+plot_model_eval_calibration <- function(evaluation_tiers) {
+
+  evaluation_tiers %>%
+    group_by(tier) %>%
+    summarise(n = sum(n),
+              correct = sum(correct),
+              percent = round(correct/n * 100, 2)) %>%
+    ggplot(aes(tier, percent)) +
+    geom_text(aes(label = percent), size = 3,
+              alpha = 0.7, vjust = "outward") +
+    geom_line() +
+    geom_abline(color = "red") +
+    geom_abline(color = "red", intercept = 10) +
+    scale_x_continuous(limits = c(50, 100)) +
+    scale_y_continuous(limits = c(30, 100)) +
+    labs(x = "Tier", y = "Percent Correct",
+         title = "Calibration of Weekly Predictions")
+
+}
+
+# Experimental ------------------------------------------------------------
+
+
+
 #' @export
 plot_pos_contribution <- function(teams,
                                   team = NULL,
@@ -542,59 +614,7 @@ plot_pos_contribution <- function(teams,
 
 }
 
-#' @export
-plot_model_eval_weekly <- function(evaluation_df) {
-
-  n_teams <- n_distinct(select(evaluation_df, starts_with("team")))
-  benchmark <- n_teams^2 - n_teams
-
-  evaluation_df %>%
-    group_by(week) %>%
-    summarise(weekly = sum(correct),
-              delta = weekly - benchmark/2,
-              percent = round(weekly/benchmark * 100, 1),
-              sign = ifelse(delta > 0, "positive",
-                            ifelse(delta < 0, "negative", "equal")),
-              .groups = "drop") %>%
-    ggplot(aes(week, delta, fill = sign, label = percent)) +
-    geom_bar(stat = 'identity') +
-    geom_text(size = 3, alpha = 0.7) +
-    scale_x_continuous(name = "week", breaks = 2:max(evaluation_df$week)) +
-    scale_y_continuous(limits = c(0-benchmark/2, benchmark/2),
-                       breaks = c(0-benchmark/2,
-                                  ((0-benchmark/2)/2),
-                                  0,
-                                  benchmark/4,
-                                  benchmark/2),
-                       labels = c(0, 25, 50, 75, 100)) +
-    scale_fill_manual(values = c(equal = "#619CFF",
-                                 negative = "#F8766D",
-                                 positive = "#00BA38")) +
-    labs(title = "Weekly Evaluation of Model",
-         x = "Week (starting with week 2)",
-         y = "Percent Correct") +
-    theme(panel.background= element_blank(),
-          panel.border = element_blank()) +
-    guides(fill = "none")
-}
-
-#' @export
-plot_model_eval_calibration <- function(evaluation_tiers) {
-
-  evaluation_tiers %>%
-    group_by(tier) %>%
-    summarise(n = sum(n),
-              correct = sum(correct),
-              percent = round(correct/n * 100, 2)) %>%
-    ggplot(aes(tier, percent)) +
-    geom_text(aes(label = percent), size = 3,
-              alpha = 0.7, vjust = "outward") +
-    geom_line() +
-    geom_abline(color = "red") +
-    geom_abline(color = "red", intercept = 10) +
-    scale_x_continuous(limits = c(50, 100)) +
-    scale_y_continuous(limits = c(30, 100)) +
-    labs(x = "Tier", y = "Percent Correct",
-         title = "Calibration of Weekly Predictions")
-
-}
+# Win/Loss Margin
+# Average win/loss score
+# Do teams play you harder?: opponents scores vs their average
+# Team by team heatmap
