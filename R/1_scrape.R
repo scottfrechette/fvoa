@@ -105,7 +105,7 @@ scrape_player_projections <- function(week,
       unnest(data) %>%
       select(yahooID = playerID, player, position, teamID) %>%
       mutate(position = if_else(position == "DEF", "DST", position),
-             teamID = if_else(str_detect(teamID, "^[A-Z] [()]|^0$"), "FA", teamID))
+             teamID = if_else(str_detect(teamID, "^[A-Z] [()]|^0$"), "0", teamID))
 
     out <- yahoo_players %>%
       inner_join(select(player_table, yahooID, mflID), by = "yahooID")
@@ -120,6 +120,7 @@ scrape_player_projections <- function(week,
       filter(pos %in% c("QB", "RB", "WR", "TE", "K", "DST"),
              team != "FA") %>%
       select(espnID = 1, player = 2, position = 3) %>%
+      replace_na(list(espnID = 0L)) %>%
       left_join(ffscrapr::ff_rosters(conn, week = week) %>%
                   select(teamID = 1, espnID = 3),
                 by = "espnID")
@@ -134,8 +135,8 @@ scrape_player_projections <- function(week,
   }
 
   mutate(out,
-         teamID = as.integer(teamID),
-         mflID = as.integer(mflID))
+         teamID = as.integer(teamID))#,
+         # mflID = as.integer(mflID))
 
 }
 
