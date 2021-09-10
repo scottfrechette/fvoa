@@ -226,9 +226,9 @@ scrape_yahoo_schedule <- function(leagueID, week,
     separate(value, c("team1", "team2"), sep = "vs") %>%
     mutate(gameID = row_number(),
            week = week) %>%
-    extract(team1, c("team_score", "team_projected", "team", "team_record"),
+    extract(team1, c("team_projected", "team_score", "team", "team_record"),
             "(\\d+\\.\\d+)  ([0-9.]+) +(.*)  ([0-9-)]+)") %>%
-    extract(team2, c("opponent_score", "opponent_projected", "opponent", "opponent_record"),
+    extract(team2, c("opponent_projected", "opponent_score", "opponent", "opponent_record"),
             "(\\d+\\.\\d+)  ([0-9.]+) +(.*)  ([0-9-)]+)") %>%
     bind_cols(teamIDs) %>%
     select(week, teamID, team_score, opponentID, opponent_score)
