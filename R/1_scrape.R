@@ -107,8 +107,14 @@ scrape_player_projections <- function(week,
       mutate(position = if_else(position == "DEF", "DST", position),
              teamID = if_else(str_detect(teamID, "^[A-Z] [()]|^0$"), "0", teamID))
 
-    out <- yahoo_players %>%
+    # add in players without ID
+    tmp <- yahoo_players %>%
       inner_join(select(player_table, yahooID, mflID), by = "yahooID")
+
+    out <- bind_rows(tmp,
+                     yahoo_players %>%
+                       anti_join(tmp, by = 'yahooID') %>%
+                       left_join(select(player_table, player, mflID), by = "player"))
 
   } else if (league == "espn") {
 
@@ -125,8 +131,14 @@ scrape_player_projections <- function(week,
                 by = "espnID") %>%
       replace_na(list(teamID = 0L))
 
-    out <- espn_players %>%
+    # add in players without ID
+    tmp <- espn_players %>%
       inner_join(select(player_table, espnID, mflID), by = "espnID")
+
+    out <- bind_rows(tmp,
+                     espn_players %>%
+                       anti_join(tmp, by = 'espnID') %>%
+                       left_join(select(player_table, player, mflID), by = "player"))
 
   } else {
 
