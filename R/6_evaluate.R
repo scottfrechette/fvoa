@@ -101,7 +101,6 @@ evaluate_lineup <- function(lineup_df,
 }
 
 #' @export
-<<<<<<< HEAD:R/6_evaluate.R
 evaluate_model <- function(scores, schedule = NULL) {
 
   sims <- tibble(week = 2:max(scores$week)) %>%
@@ -128,8 +127,8 @@ evaluate_model <- function(scores, schedule = NULL) {
   } else {
 
     tmp <- crossing(week = 2:max(scores$week),
-             team1 = unique(scores$team),
-             team2 = unique(scores$team)) %>%
+                    team1 = unique(scores$team),
+                    team2 = unique(scores$team)) %>%
       filter(team1 != team2) %>%
       left_join(rename(scores, team1 = team, score1 = score), by = c("week", "team1")) %>%
       left_join(rename(scores, team2 = team, score2 = score), by = c("week", "team2")) %>%
@@ -139,39 +138,6 @@ evaluate_model <- function(scores, schedule = NULL) {
   }
 
   tmp %>%
-=======
-evaluate_model <- function(scores,
-                           evaluation_week,
-                           .fun = simulate_score,
-                           ...,
-                           schedule = NULL) {
-
-  team_col <- names(select(scores, starts_with("team")))
-  scores_tmp <- scores %>%
-    extract_scores() %>%
-    select(week, team = starts_with("team"), score)
-  teams <- unique(scores_tmp$team)
-
-  previous_scores <- scores_tmp %>%
-    filter(week < evaluation_week) %>%
-    mutate(evaluation_week = evaluation_week)
-
-  actual_scores <- scores_tmp %>%
-    filter(week == evaluation_week) %>%
-    select(team1 = team, score1 = score)
-
-  set.seed(42)
-
-  pred_scores <- actual_scores %>%
-    mutate(sim1 = map(team1, .fun,
-                      scores = previous_scores,
-                      ...))
-
-  out <- crossing(pred_scores,
-                  rename(pred_scores,
-                         team2 = team1, score2 = score1, sim2 = sim1)) %>%
-    filter(team1 != team2) %>%
->>>>>>> master:R/evaluate.R
     mutate(margin = score1 - score2,
            sims = map2(data1, data2, ~.x - .y),
            win_prob = map_dbl(sims, ~convert_wp(.$score)),
@@ -194,54 +160,12 @@ evaluate_model <- function(scores,
              win_prob == 0 & correct == 1 ~ 1000,
              win_prob == 0 & correct == 0 ~ -1000,
              correct == 1 ~ win_prob,
-<<<<<<< HEAD:R/6_evaluate.R
              TRUE ~ -win_prob)) %>%
     select(week, team = team1, opp = team2, margin, act_outcome,
            win_prob, pred_outcome, correct, sim,
            lower50, upper50, range50,
            lower80, upper80, range80,
            lower95, upper95, range95)
-=======
-             TRUE ~ -win_prob),
-           week = evaluation_week) %>%
-    select(week, team1, team2, margin,
-           lower80, upper80, lower95, upper95,
-           range80, range95,
-           win_prob, pred_outcome, act_outcome,
-           correct, sim) %>%
-    set_names("week", team_col, "opp", "margin",
-              "lower80", "upper80", "lower95", "upper95",
-              "range80", "range95",
-              "win_prob", "pred_outcome", "act_outcome",
-              "correct", "sim")
-
-  if("league" %in% names(scores)) {
-
-    out <- out %>%
-      mutate(league = scores$league[1],
-             leagueID = scores$leagueID[1],
-             season = scores$season[1],
-             .before = 1)
-
-  }
-
-  if(!is.null(schedule)) {
-
-    sched <- schedule %>%
-      filter(week == evaluation_week) %>%
-      doublewide_schedule() %>%
-      select(teamID = team1, opp = team2, gameID)
-
-    out <- out %>%
-      left_join(sched,
-                by = c("teamID", "opp")) %>%
-      mutate(scheduled = !is.na(gameID)) %>%
-      select(-gameID)
-
-  }
-
-  return(out)
->>>>>>> master:R/evaluate.R
 
 }
 
@@ -269,7 +193,7 @@ evaluate_team_accuracy <- function(evaluation_df, .latest = TRUE) {
 
   team_col <- names(select(evaluation_df, starts_with("team")))
 
-  if(.latest) evaluation_df <- filter(evaluation_df, week == max(week))
+  if(.latest) filter(evaluation_df, week == max(week))
 
   evaluation_df %>%
     select(team = starts_with("team"), correct) %>%
