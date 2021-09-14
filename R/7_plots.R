@@ -123,6 +123,76 @@ plot_joy_plots <- function(scores, score = score, team = team) {
 }
 
 #' @export
+plot_simulated_wins <- function(simulated_season_standings) {
+
+  simulated_season_standings %>%
+    group_by(team) %>%
+    mutate(avg = mean(wins)) %>%
+    group_by(team, avg, wins) %>%
+    summarize(pct = n() / 10000,
+              .groups = "drop") %>%
+    ggplot(aes(wins, pct, fill = team)) +
+    geom_col() +
+    geom_vline(aes(xintercept = avg), linetype = 2, color = 'red') +
+    scale_x_continuous(breaks = 1:max(schedule$week), labels = 1:max(schedule$week)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    facet_wrap(~ reorder(team, -avg), ncol = 5) +
+    theme_fvoa() +
+    guides(fill = "none") +
+    labs(x = "# Wins",
+         y = "% of Simulations",
+         title = "Simulated Team Win Distribution")
+
+
+}
+
+#' @export
+plot_simulated_weekly_points <- function(simulated_season_scores, n = 100) {
+
+  simulated_season_scores %>%
+    nest(data = -sim) %>%
+    slice_sample(n = n) %>%
+    unnest(data) %>%
+    select(sim, week, team = team1, score = score1) %>%
+    group_by(week, team) %>%
+    mutate(avg = mean(score)) %>%
+    ungroup() %>%
+    mutate(team = fct_reorder(team, avg, .fun = mean, .desc = T)) %>%
+    ggplot(aes(x = week, y = score, color = team, group = sim)) +
+    geom_line(alpha = 0.1) +
+    geom_line(aes(y = avg), size = 1.5) +
+    facet_wrap(~ team) +
+    labs(x = "Week", y = "Score") +
+    theme_fvoa() +
+    guides(color = "none")
+
+}
+
+#' @export
+plot_simulated_cumulative_points <- function(simulated_season_scores, n = 100) {
+
+  simulated_season_scores %>%
+    nest(data = -sim) %>%
+    slice_sample(n = n) %>%
+    unnest(data) %>%
+    select(sim, week, team = team1, score = score1) %>%
+    group_by(sim, team) %>%
+    mutate(points = cumsum(score)) %>%
+    group_by(week, team) %>%
+    mutate(avg = mean(points)) %>%
+    ungroup() %>%
+    mutate(team = fct_reorder(team, avg, .fun = last, .desc = T)) %>%
+    ggplot(aes(x = week, y = points, color = team, group = sim)) +
+    geom_line(alpha = 0.1) +
+    geom_line(aes(y = avg), size = 1.5) +
+    facet_wrap(~ team) +
+    labs(x = "Week", y = "Total Points") +
+    theme_fvoa() +
+    guides(color = "none")
+}
+
+
+#' @export
 plot_h2h_matchup <- function(fit, team1, team2,
                              square = FALSE) {
 
