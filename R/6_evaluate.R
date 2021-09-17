@@ -1,11 +1,16 @@
 
 #' @export
 evaluate_lineup <- function(lineup_df,
-                            qb = 1, rb = 2,
-                            wr = 3, te = 1,
-                            dst = 1, k = 1,
-                            flex = 1, rb_wr = 1,
-                            dl = 1, db = 1,
+                            qb = 1,
+                            rb = 2,
+                            wr = 3,
+                            te = 1,
+                            dst = 1,
+                            k = 1,
+                            flex = 1,
+                            rb_wr = 1,
+                            dl = 1,
+                            db = 1,
                             fa = NULL,
                             transactions = NULL,
                             plot = FALSE) {

@@ -99,7 +99,7 @@ plot_manager_evaluation <- function(team) {
 # Teams -------------------------------------------------------------------
 
 #' @export
-plot_boxplots <- function(scores, score = score, team = team) {
+plot_boxplots <- function(scores) {
   ggplot(scores, aes(x=reorder(team, -score, fun=mean), y=score, fill=team)) +
     geom_boxplot(coef = 1.25, outlier.alpha = 0.6) +
     stat_summary(fun = mean, geom="point", shape=18, size=3, show.legend = FALSE) +
@@ -110,7 +110,7 @@ plot_boxplots <- function(scores, score = score, team = team) {
 }
 
 #' @export
-plot_joy_plots <- function(scores, score = score, team = team) {
+plot_joy_plots <- function(scores) {
 
   requireNamespace("ggridges", quietly = TRUE)
 
@@ -196,7 +196,8 @@ plot_simulated_cumulative_points <- function(simulated_season_scores, n = 100) {
 plot_h2h_matchup <- function(fit, team1, team2,
                              square = FALSE) {
 
-  sim_scores_subset <- extract_draws(scores, fit) %>%
+  sim_scores_subset <- as_tibble(fit$data) %>%
+    extract_draws(fit) %>%
     ungroup() %>%
     select(sim = .draw, team, score = .prediction) %>%
     filter(team %in% c(team1, team2))

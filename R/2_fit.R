@@ -2,7 +2,9 @@
 # Main Function -----------------------------------------------------------
 
 #' @export
-fit_model <- function(scores) {
+fit_model <- function(scores,
+                      prior_mean = 115,
+                      prior_sd = 20) {
 
   scores <- left_join(scores,
                       weight_games(1:max(scores$week)),
@@ -11,8 +13,8 @@ fit_model <- function(scores) {
   rstanarm::stan_glm(score ~ 0 + team,
                      data = scores,
                      weights = weight,
-                     prior = rstanarm::student_t(10, 115, 20),
-                     # prior = rstanarm::normal(115, 20),
+                     prior = rstanarm::student_t(10, prior_mean, prior_sd),
+                     # prior = rstanarm::normal(prior_mean, prior_sd),
                      seed = 42,
                      iter = 3750,
                      warmup = 1250,

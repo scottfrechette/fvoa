@@ -76,22 +76,15 @@ calculate_stats <- function(schedule, scores, league = "Yahoo") {
   rank_col <- paste(league, "rank", sep = "_")
 
   schedule %>%
+    left_join(scores, by = c("week", "team")) %>%
     left_join(scores %>%
-                rename(team1 = team,
-                       score1 = score),
-              by = c("week", "team1")) %>%
-    left_join(scores %>%
-                rename(team2 = team,
-                       score2 = score),
-              by = c("week", "team2")) %>%
+                rename(opponent = team,
+                       opp_score = score),
+              by = c("week", "opponent")) %>%
     drop_na() %>%
-    gather(x, team, team1:team2) %>%
-    mutate(score = if_else(x == "team1", score1, score2),
-           opp_score = if_else(x == "team1", score2, score1),
-           tie = if_else(score1 == score2, 1, 0),
-           win = if_else(x == "team1" & score1 - score2 > 0, 1,
-                         if_else(x == "team2" & score2 - score1 > 0, 1, 0)),
-           lose = if_else(tie == 0 & win == 0, 1, 0)) %>%
+    mutate(tie = if_else(score == opp_score, 1, 0),
+           win = if_else(score > opp_score, 1, 0),
+           lose = if_else(score < opp_score, 1, 0)) %>%
     group_by(team) %>%
     summarise(pf = sum(score),
               pa = sum(opp_score),

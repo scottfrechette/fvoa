@@ -2,14 +2,14 @@
 # Main Functions ----------------------------------------------------------
 
 #' @export
-compare_teams <- function(model, team1, team2,
+compare_teams <- function(fit, team1, team2,
                           .output = c("prob", "odds", "spread"),
                           .verbose = FALSE) {
 
   .output <- match.arg(.output)
 
   sim <- tibble(team = c(team1, team2)) %>%
-    tidybayes::add_predicted_draws(model, seed = 42) %>%
+    tidybayes::add_predicted_draws(fit, seed = 42) %>%
     ungroup() %>%
     select(team, sim = .draw, score = .prediction) %>%
     spread(team, score) %>%
@@ -65,10 +65,11 @@ compare_teams <- function(model, team1, team2,
 }
 
 #' @export
-compare_league <- function(scores, model) {
+compare_league <- function(fit) {
 
-  team_sims <- distinct(scores, team) %>%
-    tidybayes::add_predicted_draws(model, seed = 42) %>%
+  team_sims <- as_tibble(fit$data) %>%
+    distinct(team) %>%
+    tidybayes::add_predicted_draws(fit, seed = 42) %>%
     ungroup() %>%
     select(team, score = .prediction) %>%
     nest(data = -team)
@@ -85,26 +86,27 @@ compare_league <- function(scores, model) {
 }
 
 #' @export
-compare_current_matchups <- function(scores,
-                                     schedule,
-                                     model,
+compare_current_matchups <- function(schedule,
+                                     fit,
                                      win_prob = NULL) {
+
+  scores <- as_tibble(fit$data)
 
   cutoff <- length(unique(scores$team)) / 2
 
   current_matchups <- schedule %>%
     filter(week == max(scores$week) + 1) %>%
-    mutate(fvoa_wp = map2_dbl(team1, team2,
-                              ~compare_teams(model, team1 = .x, team2 = .y))) %>%
+    mutate(fvoa_wp = map2_dbl(team, opponent,
+                              ~compare_teams(fit, team1 = .x, team2 = .y))) %>%
     arrange(-fvoa_wp) %>%
     head(cutoff) %>%
     mutate(Line = map_chr(fvoa_wp, prob_to_odds),
            fvoa_wp = round(fvoa_wp/100, 2) %>% format_pct,
-           Spread = map2_chr(team1, team2,
-                             ~compare_teams(model, team1 = .x, team2 = .y,
+           Spread = map2_chr(team, opponent,
+                             ~compare_teams(fit, team1 = .x, team2 = .y,
                                             .output = "spread"))) %>%
-    select(Winner = team1,
-           Loser = team2,
+    select(Winner = team,
+           Loser = opponent,
            FVOA = fvoa_wp,
            Spread,
            Line)
@@ -124,21 +126,21 @@ compare_current_matchups <- function(scores,
 }
 
 #' @export
-compare_playoff_teams <- function(model, seed1, seed2, seed3, seed4) {
+compare_playoff_teams <- function(fit, seed1, seed2, seed3, seed4) {
 
   # Simulate each possible matchup
-  t1r1 <- compare_teams(model, seed1, seed4)/100
-  t2r1 <- compare_teams(model, seed2, seed3)/100
-  t3r1 <- compare_teams(model, seed3, seed2)/100
-  t4r1 <- compare_teams(model, seed4, seed1)/100
-  t12r2 <- compare_teams(model, seed1, seed2)/100
-  t13r2 <- compare_teams(model, seed1, seed3)/100
-  t21r2 <- compare_teams(model, seed2, seed1)/100
-  t24r2 <- compare_teams(model, seed2, seed4)/100
-  t31r2 <- compare_teams(model, seed3, seed1)/100
-  t34r2 <- compare_teams(model, seed3, seed4)/100
-  t42r2 <- compare_teams(model, seed4, seed2)/100
-  t43r2 <- compare_teams(model, seed4, seed3)/100
+  t1r1 <- compare_teams(fit, seed1, seed4)/100
+  t2r1 <- compare_teams(fit, seed2, seed3)/100
+  t3r1 <- compare_teams(fit, seed3, seed2)/100
+  t4r1 <- compare_teams(fit, seed4, seed1)/100
+  t12r2 <- compare_teams(fit, seed1, seed2)/100
+  t13r2 <- compare_teams(fit, seed1, seed3)/100
+  t21r2 <- compare_teams(fit, seed2, seed1)/100
+  t24r2 <- compare_teams(fit, seed2, seed4)/100
+  t31r2 <- compare_teams(fit, seed3, seed1)/100
+  t34r2 <- compare_teams(fit, seed3, seed4)/100
+  t42r2 <- compare_teams(fit, seed4, seed2)/100
+  t43r2 <- compare_teams(fit, seed4, seed3)/100
 
   # Calculate chances of each team winning both rounds
   t1wins <- round(t1r1 * ((t2r1 * t12r2) + (t3r1 * t13r2)), 4) * 100

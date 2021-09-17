@@ -1,13 +1,17 @@
 #' @export
-simulate_season_scores <- function(scores, schedule, model,
+simulate_season_scores <- function(schedule, fit,
                                    change_prob = 0.1,
                                    score_adj = 15) {
 
   set.seed(42)
 
+  scores <- fit$data %>%
+    as_tibble() %>%
+    select(-weight)
+
   sims <- schedule %>%
-    distinct(week, team = team1) %>%
-    tidybayes::add_predicted_draws(model, seed = 42) %>%
+    distinct(week, team) %>%
+    tidybayes::add_predicted_draws(fit, seed = 42) %>%
     ungroup() %>%
     select(sim = .draw, week, team, score = .prediction) %>%
     mutate(change = rbinom(n = n(), size = 1, prob = change_prob),
@@ -25,18 +29,18 @@ simulate_season_scores <- function(scores, schedule, model,
       schedule %>%
         filter(week <= max(scores$week)) %>%
         left_join(rename(scores, score1 = score),
-                  by = c("week", "team1" = "team")) %>%
+                  by = c("week", "team")) %>%
         left_join(rename(scores, score2 = score),
-                  by = c("week", "team2" = "team")) %>%
+                  by = c("week", "opponent" = "team")) %>%
         mutate(win = score1 > score2)),
     schedule %>%
       filter(week > max(scores$week)) %>%
       left_join(rename(sims, score1 = adj_score),
-                by = c("week", "team1" = "team")) %>%
+                by = c("week", "team")) %>%
       left_join(rename(sims, score2 = adj_score),
-                by = c("week", "team2" = "team", "sim")) %>%
+                by = c("week", "opponent" = "team", "sim")) %>%
       mutate(win = score1 > score2) %>%
-      select(week, team1, team2,
+      select(week, team, opponent,
              score1, score2, win, sim)
   )
 
@@ -60,7 +64,7 @@ simulate_season_standings <- function(sim_scores) {
     pull()
 
   sim_scores %>%
-    group_by(sim, team = team1) %>%
+    group_by(sim, team) %>%
     summarize(pf = sum(score1),
               pa = sum(score2),
               wins = sum(score1 > score2),
