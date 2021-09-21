@@ -823,6 +823,47 @@ plot_pos_contribution <- function(teams,
 
 }
 
+plot_shrinkage <- function(fit) {
+
+  scores <- as_tibble(fit$data)
+
+  team_avg <- scores %>%
+    group_by(team) %>%
+    summarize(avg = mean(score), .groups = "drop")
+
+  tidybayes::add_epred_draws(distinct(scores, team), fit) %>%
+    tidybayes::median_hdi() %>%
+    left_join(team_avg, by = "team") %>%
+    ggplot(aes(y = reorder(team, avg))) +
+    geom_point(aes(x = avg), color = "#0072B2") +
+    geom_point(aes(x = .epred), color = "#009E73") +
+    geom_vline(xintercept = 115, linetype = 2) +
+    labs(y = NULL,
+         x = "Score",
+         title = "Visualize shrinkage from <span style='color:#0072B2;'>actual</span> and <span style='color:#009E73;'>fitted</span> scores") +
+    theme_fvoa() +
+    theme(plot.title = ggtext::element_markdown())
+
+}
+
+# sims <- tibble(week = 1:2) %>% #max(scores$week)
+#   mutate(filtered_scores = map(week, ~filter(scores, week <= .x)),
+#          model = map(filtered_scores, fit_model),
+#          sims = map(model,
+#                     ~distinct(scores, team) %>%
+#                       tidybayes::add_predicted_draws(.x, seed = 42, value = "score") %>%
+#                       ungroup() %>%
+#                       nest(data = -team)))
+#
+# sims %>%
+#   select(week, filtered_scores) %>%
+#   mutate(team_avg = map(filtered_scores,
+#                         ~ .x %>%
+#                           group_by(team) %>%
+#                           summarize(avg = mean(score), .groups = "drop"))) %>%
+#   select(week, team_avg) %>%
+#   unnest(team_avg)
+
 # Win/Loss Margin
 # Average win/loss score
 # Do teams play you harder?: opponents scores vs their average
