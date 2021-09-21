@@ -233,11 +233,12 @@ evaluate_tiers <- function(evaluation_df) {
 }
 
 #' @export
-evaluate_projections <- function(projections, schedule = NULL) {
+evaluate_projections <- function(projections, schedule = NULL,
+                                 .summary = FALSE) {
 
   if (!is.null(schedule)) {
 
-    schedule %>%
+    out <- schedule %>%
       inner_join(projections, by = c("week", "team")) %>%
       left_join(rename(projections, opponent = 2,
                        opp_proj = 3, opp_act = 4),
@@ -251,7 +252,7 @@ evaluate_projections <- function(projections, schedule = NULL) {
 
   } else {
 
-    crossing(team = unique(projections$team),
+    out <- crossing(team = unique(projections$team),
              opponent = unique(projections$team)) %>%
       filter(team != opponent) %>%
       inner_join(projections, by = "team") %>%
@@ -260,12 +261,20 @@ evaluate_projections <- function(projections, schedule = NULL) {
                 by = c("week", "opponent")) %>%
       mutate(proj_win = projected > opp_proj,
              act_win = actual > opp_act,
-             correct = proj_win == act_win) %>%
-      group_by(week) %>%
-      summarize(correct = mean(correct),
-                .groups = 'drop')
+             correct = proj_win == act_win)
 
   }
+
+  if (.summary) {
+
+    out <- out %>%
+      group_by(week) %>%
+      summarize(correct = mean(correct),
+                .groups = "drop")
+
+  }
+
+  return(out)
 
 }
 

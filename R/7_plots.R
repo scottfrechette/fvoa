@@ -668,7 +668,9 @@ plot_model_eval_weekly <- function(evaluation_df) {
     scale_fill_manual(values = c(equal = "#619CFF",
                                  negative = "#F8766D",
                                  positive = "#00BA38")) +
-    labs(title = "Weekly Evaluation of Model",
+    labs(title = "Weekly Evaluation of FVOA Projections",
+         subtitle = paste("Overall accuracy of all possible matchups:",
+                          format_pct(mean(evaluation_df$correct), accuracy = 0.1)),
          x = "Week (starting with week 2)",
          y = "Percent Correct") +
     theme(panel.background= element_blank(),
@@ -703,6 +705,9 @@ plot_projection_eval <- function(projection_eval, n_teams = 10) {
   benchmark <- n_teams^2 - n_teams
 
   projection_eval %>%
+    group_by(week) %>%
+    summarize(correct = mean(correct),
+              .groups = 'drop') %>%
     mutate(delta = correct * 100 - 50,
            overall_delta = mean(correct) * 100,
            percent = scales::percent(correct, accuracy = 0.1),

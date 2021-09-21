@@ -166,16 +166,13 @@ extract_scores <- function(team) {
 #' @export
 extract_projections <- function(team) {
 
-  team_col <- names(select(team, starts_with("team")))
-
   team %>%
     dplyr::filter(!roster %in% c("BN", "IR", "BE")) %>%
-    dplyr::select(week, team = starts_with("team"), score, projected) %>%
+    dplyr::select(week, team, points, projected) %>%
     dplyr::group_by(week, team) %>%
     dplyr::summarize(projected = sum(projected, na.rm = T),
-                     actual = score[1],
-                     .groups = "drop") %>%
-    purrr::set_names("week", team_col, "projected", "actual")
+                     actual = sum(points, na.rm = T),
+                     .groups = "drop")
 
 }
 
