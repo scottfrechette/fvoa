@@ -4,7 +4,7 @@
 #' @export
 fit_model <- function(scores,
                       prior_mean = 115,
-                      prior_sd = 20) {
+                      prior_sd = 10) {
 
   scores <- left_join(scores,
                       weight_games(1:max(scores$week)),

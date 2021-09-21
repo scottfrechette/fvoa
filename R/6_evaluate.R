@@ -113,7 +113,7 @@ evaluate_model <- function(scores, schedule = NULL) {
            model = map(evaluation_scores, fit_model),
            sims = map(model,
                       ~distinct(scores, team) %>%
-                        tidybayes::add_predicted_draws(.x, seed = 42, value = score) %>%
+                        tidybayes::add_predicted_draws(.x, seed = 42, value = "score") %>%
                         ungroup() %>%
                         nest(data = -team))) %>%
     select(week, sims) %>%
