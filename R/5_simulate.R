@@ -55,15 +55,15 @@ simulate_season_scores <- function(schedule, fit,
 }
 
 #' @export
-simulate_season_standings <- function(sim_scores) {
+simulate_season_standings <- function(simulated_scores) {
 
-  leverage_week <- sim_scores %>%
+  leverage_week <- simulated_scores %>%
     count(week, score1, score2) %>%
     filter(n == max(n)) %>%
     summarize(weeks_played = max(week) + 1) %>%
     pull()
 
-  sim_scores %>%
+  simulated_scores %>%
     group_by(sim, team) %>%
     summarize(pf = sum(score1),
               pa = sum(score2),
@@ -81,13 +81,38 @@ simulate_season_standings <- function(sim_scores) {
 }
 
 #' @export
-simulate_final_standings <- function(sim_standings) {
+simulate_final_standings <- function(simulated_standings, .verbose = T) {
 
-  sim_standings %>%
-    group_by(team) %>%
-    summarize(wins = mean(wins),
-              points = mean(pf),
-              playoffs = mean(playoffs)) %>%
-    arrange(-playoffs)
+  if (.verbose) {
+
+    simulated_standings %>%
+      group_by(team) %>%
+      summarize(pf = mean(pf),
+                pa = mean(pa),
+                wins = mean(wins),
+                losses = mean(losses),
+                ties = mean(tie),
+                wp = mean(wp),
+                playoffs = mean(playoffs)) %>%
+      arrange(-playoffs) %>%
+      mutate(rank = 1:n()) %>%
+      mutate(season = as.integer(current_season),
+             week = as.integer(weeks_played),
+             .before = 1) %>%
+      select(season, week, team, pf:rank)
+
+  } else {
+
+    simulated_standings %>%
+      group_by(team) %>%
+      summarize(wins = mean(wins),
+                points = mean(pf),
+                playoffs = mean(playoffs)) %>%
+      arrange(-playoffs)
+
+  }
+
+
+
 
 }

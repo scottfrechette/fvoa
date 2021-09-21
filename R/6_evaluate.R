@@ -233,6 +233,43 @@ evaluate_tiers <- function(evaluation_df) {
 
 }
 
+#' @export
+evaluate_projections <- function(projections, schedule = NULL) {
+
+  if (!is.null(schedule)) {
+
+    schedule %>%
+      inner_join(projections, by = c("week", "team")) %>%
+      left_join(rename(projections, opponent = 2,
+                       opp_proj = 3, opp_act = 4),
+                by = c("week", "opponent")) %>%
+      mutate(proj_win = projected > opp_proj,
+             act_win = actual > opp_act,
+             correct = proj_win == act_win) %>%
+      group_by(week) %>%
+      summarize(correct = mean(correct),
+                .groups = 'drop')
+
+  } else {
+
+    crossing(team = unique(projections$team),
+             opponent = unique(projections$team)) %>%
+      filter(team != opponent) %>%
+      inner_join(projections, by = "team") %>%
+      left_join(rename(projections, opponent = 2,
+                       opp_proj = 3, opp_act = 4),
+                by = c("week", "opponent")) %>%
+      mutate(proj_win = projected > opp_proj,
+             act_win = actual > opp_act,
+             correct = proj_win == act_win) %>%
+      group_by(week) %>%
+      summarize(correct = mean(correct),
+                .groups = 'drop')
+
+  }
+
+}
+
 # Helper Functions --------------------------------------------------------
 
 max_points_position <- function(lineup_df, .team, .week,

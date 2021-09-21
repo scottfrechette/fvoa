@@ -99,6 +99,46 @@ plot_manager_evaluation <- function(team) {
 # Teams -------------------------------------------------------------------
 
 #' @export
+plot_team_fvoa <- function(fit, .label = T) {
+
+  tmp <- tidybayes::add_epred_draws(distinct(fit$data, team), fit, seed = 42) %>%
+    mutate(fvoa = .epred - 115) %>%
+    tidybayes::median_qi(fvoa, .width = c(.89, .5)) %>%
+    mutate(label = str_glue("{team} ({round(fvoa, 1)})")) %>%
+    arrange(-fvoa)
+
+  p <- tmp %>%
+    ggplot(aes(y = reorder(team, fvoa),
+               yend = reorder(team, fvoa))) +
+    geom_segment(aes(x = .lower, xend = .upper),
+                 data = filter(tmp, .width == 0.89),
+                 size = 0.5, color = "#6497b1") +
+    geom_segment(aes(x = .lower, xend = .upper),
+                 data = filter(tmp, .width == 0.5),
+                 size = 2, color = "#03396c") +
+    geom_point(aes(x = fvoa),
+               size = 4, fill = "#d1e1ec", color = "#011f4b", shape = 21) +
+    geom_vline(xintercept = 0, linetype = 2, color = "grey50") +
+    labs(x = "FVOA", y = NULL) +
+    theme_fvoa() +
+    theme(axis.text.y = element_text(face = "bold"),
+          axis.title.x = element_text(face = "bold"),
+          panel.grid.major.y = element_blank())
+
+  if(.label) {
+
+    p <- p +
+      geom_text(aes(label = label, x = fvoa),
+                vjust = -1, alpha = 0.5, size = 3.5) +
+      theme(axis.text.y = element_blank(),
+            panel.border = element_blank())
+  }
+
+  return(p)
+
+}
+
+#' @export
 plot_boxplots <- function(scores) {
   ggplot(scores, aes(x=reorder(team, -score, fun=mean), y=score, fill=team)) +
     geom_boxplot(coef = 1.25, outlier.alpha = 0.6) +
@@ -384,7 +424,7 @@ plot_playoff_leverage <- function(sim_standings) {
     theme_void() +
     theme(plot.margin = unit(c(0.5, 1.5, 0.5, 1.5), "cm"))
 
-  leverage_plot / legend_plot + plot_layout(heights = c(5, 1))
+  leverage_plot / legend_plot + plot_layout(heights = c(5, 2))
 
 }
 
@@ -499,23 +539,23 @@ plot_exp_wpct <- function(scores, schedule) {
 #' @export
 plot_wpag <- function(scores, schedule) {
 
-  left_join(rename(scores, team1 = team, score1 = score),
-            rename(scores, team2 = team, score2 = score),
+  left_join(scores,
+            rename(scores, opponent = team, opp_score = score),
             by = "week") %>%
-    filter(team1 != team2) %>%
+    filter(team != opponent) %>%
     left_join(mutate(schedule, scheduled = T),
-              by = c("week", "team1", "team2")) %>%
+              by = c("week", "team", "opponent")) %>%
     replace_na(list(scheduled = FALSE)) %>%
-    mutate(win = score1 > score2,
+    mutate(win = score > opp_score,
            scheduled_win = scheduled & win) %>%
-    group_by(team1) %>%
+    group_by(team) %>%
     summarize(scheduled = sum(scheduled),
               scheduled_wins = sum(scheduled_win),
               possible = n(),
               possible_wins = sum(win)) %>%
     mutate(scheduled_wp = scheduled_wins / scheduled,
            possible_wp = possible_wins / possible) %>%
-    ggplot(aes(scheduled_wp, possible_wp, label = team1)) +
+    ggplot(aes(scheduled_wp, possible_wp, label = team)) +
     ggrepel::geom_text_repel() +
     geom_point() +
     scale_x_continuous(labels = scales::percent_format(accuracy = 1),
@@ -540,6 +580,61 @@ plot_wpag <- function(scores, schedule) {
          title = "Comparison of Win Percentage and Win Percentage of All Possible Games") +
     theme_fvoa() +
     theme(panel.grid.major.y = element_blank())
+
+  # left_join(scores,
+  #           rename(scores, opponent = team, opp_score = score),
+  #           by = "week") %>%
+  #   filter(team != opponent) %>%
+  #   left_join(mutate(schedule, scheduled = T),
+  #             by = c("week", "team", "opponent")) %>%
+  #   replace_na(list(scheduled = FALSE)) %>%
+  #   mutate(win = score > opp_score,
+  #          scheduled_win = scheduled & win) %>%
+  #   group_by(team) %>%
+  #   summarize(scheduled = sum(scheduled),
+  #             scheduled_wins = sum(scheduled_win),
+  #             possible = n(),
+  #             possible_wins = sum(win)) %>%
+  #   mutate(scheduled_wp = scheduled_wins / scheduled,
+  #          possible_wp = possible_wins / possible) %>%
+  #   ggplot(aes(y = reorder(team, scheduled_wp))) +
+  #   geom_point(aes(x = scheduled_wp), size = 4) +
+  #   geom_point(aes(x = possible_wp), color = "red", size = 4) +
+  #   geom_segment(aes(yend = reorder(team, scheduled_wp),
+  #                    x = scheduled_wp,
+  #                    xend = possible_wp),
+  #                arrow = arrow(),
+  #                size = 1) +
+  #   labs(x = "Win Percentage",
+  #        y = NULL,
+  #        title = "Scheduled WP vs League-Wide WP") +
+  #   theme_fvoa()
+  #
+  # left_join(scores,
+  #           rename(scores, opponent = team, opp_score = score),
+  #           by = "week") %>%
+  #   filter(team != opponent) %>%
+  #   left_join(mutate(schedule, scheduled = T),
+  #             by = c("week", "team", "opponent")) %>%
+  #   replace_na(list(scheduled = FALSE)) %>%
+  #   mutate(win = score > opp_score,
+  #          scheduled_win = scheduled & win) %>%
+  #   group_by(team) %>%
+  #   summarize(scheduled = sum(scheduled),
+  #             scheduled_wins = sum(scheduled_win),
+  #             possible = n(),
+  #             possible_wins = sum(win)) %>%
+  #   mutate(scheduled_wp = scheduled_wins / scheduled,
+  #          possible_wp = possible_wins / possible,
+  #          diff = possible_wp - scheduled_wp) %>%
+  #   arrange(-diff) %>% ggplot(aes(y = reorder(team, diff), x = diff)) +
+  #   geom_point() +
+  #   geom_vline(xintercept = 0, linetype = 2) +
+  #   theme_fvoa() +
+  #   scale_x_continuous(labels = scales::percent_format(accuracy = 1)) +
+  #   labs(x = "Difference in WP",
+  #        y = NULL,
+  #        title = "Different in WPAG v WP")
 
 }
 
@@ -602,9 +697,52 @@ plot_model_eval_calibration <- function(evaluation_tiers) {
 
 }
 
+#' @export
+plot_projection_eval <- function(projection_eval, n_teams = 10) {
+
+  benchmark <- n_teams^2 - n_teams
+
+  projection_eval %>%
+    mutate(delta = correct * 100 - 50,
+           overall_delta = mean(correct) * 100,
+           percent = scales::percent(correct, accuracy = 0.1),
+           sign = case_when(
+             delta > 0 ~ "positive",
+             delta < 0 ~ "negative",
+             TRUE ~ "equal"
+           )) %>%
+    ggplot(aes(week, delta, fill = sign, label = percent)) +
+    geom_bar(stat = 'identity') +
+    geom_text(size = 3, alpha = 0.7, vjust = "outward") +
+    scale_x_continuous(breaks = 1:max(projection_eval$week)) +
+    scale_y_continuous(limits = c(0-benchmark/2, benchmark/2),
+                       breaks = c(0-benchmark/2,
+                                  ((0-benchmark/2)/2),
+                                  0,
+                                  benchmark/4,
+                                  benchmark/2),
+                       labels = c(0, 25, 50, 75, 100)) +
+    scale_fill_manual(values = c(equal = "#619CFF",
+                                 negative = "#F8766D",
+                                 positive = "#00BA38")) +
+    labs(title = "Weekly Evaluation of League Projections",
+         subtitle = paste("Overall accuracy of all possible matchups:",
+                          format_pct(mean(projection_eval$correct), accuracy = 0.1)),
+         x = "Week",
+         y = "Percent Correct") +
+    theme(panel.background= element_blank(),
+          panel.border = element_blank()) +
+    guides(fill = "none")
+}
+
 # Experimental ------------------------------------------------------------
 
 
+# evaluate_lineup() %>%
+#   ggplot(aes(y = reorder(team, actual))) +
+#   geom_point(aes(x = projected), color = 'red') +
+#   ggalt::geom_dumbbell(aes(x = max, xend = actual), colour_x = 'red', size_x = 3, size_xend = 3) +
+#   theme_fvoa()
 
 #' @export
 plot_pos_contribution <- function(teams,
