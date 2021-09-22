@@ -853,7 +853,7 @@ plot_shrinkage <- function(fit) {
 
 # sims <- tibble(week = 1:2) %>% #max(scores$week)
 #   mutate(filtered_scores = map(week, ~filter(scores, week <= .x)),
-#          model = map(filtered_scores, fit_model),
+#          model = map(filtered_scores, fit_team),
 #          sims = map(model,
 #                     ~distinct(scores, team) %>%
 #                       tidybayes::add_predicted_draws(.x, seed = 42, value = "score") %>%

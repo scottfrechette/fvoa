@@ -10,23 +10,12 @@ calculate_rankings <- function(schedule, fit, league) {
 }
 
 #' @export
-calculate_fvoa_season <- function(scores) {
+calculate_fvoa_season <- function(fit_team_season_df) {
 
-  fvoa <- list()
-
-  for (i in 1:n_distinct(scores$week)) {
-
-    scores_tmp <- filter(scores, week %in% 1:i)
-    fit_tmp <- fit_model(scores_tmp)
-    fvoa_rankings <- calculate_fvoa(fit_tmp) %>%
-      mutate(week = i,
-             .before = 1)
-    fvoa[i] <- list(fvoa_rankings)
-
-  }
-
-  tibble(fvoa) %>%
-    unnest(fvoa)
+  fit_team_season_df %>%
+    mutate(weekly_fvoa = map(model, calculate_fvoa)) %>%
+    select(week, weekly_fvoa) %>%
+    unnest(weekly_fvoa)
 
 }
 

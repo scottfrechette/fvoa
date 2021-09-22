@@ -58,10 +58,11 @@ simulate_season_scores <- function(schedule, fit,
 simulate_season_standings <- function(simulated_scores) {
 
   leverage_week <- simulated_scores %>%
-    count(week, score1, score2) %>%
-    filter(n == max(n)) %>%
-    summarize(weeks_played = max(week) + 1) %>%
-    pull()
+    distinct(week, team, score1) %>%
+    group_by(week) %>%
+    filter(n() == n_distinct(simulated_scores$team)) %>%
+    distinct(week) %>%
+    max(.$week) + 1
 
   simulated_scores %>%
     group_by(sim, team) %>%
@@ -72,7 +73,8 @@ simulate_season_standings <- function(simulated_scores) {
               tie = sum(score1 == score2),
               wp = wins / n(),
               leverage_week = leverage_week,
-              leverage_win = sum(score1 > score2 & week == leverage_week)) %>%
+              leverage_win = sum(score1 > score2 & week == leverage_week),
+              .groups = "drop") %>%
     group_by(sim) %>%
     arrange(-wins, -pf) %>%
     mutate(playoffs = row_number() <= 4) %>%
@@ -96,10 +98,7 @@ simulate_final_standings <- function(simulated_standings, .verbose = T) {
                 playoffs = mean(playoffs)) %>%
       arrange(-playoffs) %>%
       mutate(rank = 1:n()) %>%
-      mutate(season = as.integer(current_season),
-             week = as.integer(weeks_played),
-             .before = 1) %>%
-      select(season, week, team, pf:rank)
+      select(team, pf:rank)
 
   } else {
 
@@ -112,7 +111,16 @@ simulate_final_standings <- function(simulated_standings, .verbose = T) {
 
   }
 
+}
 
+#' @export
+simulate_final_standings_season <- function(fit_team_season_df, schedule) {
 
+  fit_team_season_df %>%
+    mutate(simulated_scores = map(model, ~ simulate_season_scores(schedule, .x)),
+           simulated_standings = map(simulated_scores, simulate_season_standings),
+           simulated_final_standings = map(simulated_standings, simulate_final_standings)) %>%
+    select(week, simulated_final_standings) %>%
+    unnest(simulated_final_standings)
 
 }

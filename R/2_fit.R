@@ -2,7 +2,7 @@
 # Main Function -----------------------------------------------------------
 
 #' @export
-fit_model <- function(scores,
+fit_team <- function(scores,
                       prior_mean = 115,
                       prior_sd = 10) {
 
@@ -20,6 +20,17 @@ fit_model <- function(scores,
                      warmup = 1250,
                      chains = 4,
                      cores = 4)
+
+}
+
+#' @export
+fit_team_season <- function(scores,
+                            prior_mean = 115,
+                            prior_sd = 10) {
+
+  tibble(week = 1:max(scores$week)) %>%
+    mutate(scores_filtered = map(week, ~filter(scores, week <= .x)),
+           model = map(scores_filtered, fit_team))
 
 }
 

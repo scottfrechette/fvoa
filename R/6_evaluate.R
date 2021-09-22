@@ -106,13 +106,13 @@ evaluate_lineup <- function(lineup_df,
 }
 
 #' @export
-evaluate_model <- function(scores, schedule = NULL) {
+evaluate_model <- function(fit_team_season_df, schedule = NULL) {
 
-  sims <- tibble(week = 2:max(scores$week)) %>%
-    mutate(evaluation_scores = map(week, ~filter(scores, week < .x)),
-           model = map(evaluation_scores, fit_model),
+  sims <- fit_team_season_df %>%
+    filter(week < max(fit_team_season_df$week)) %>%
+    mutate(week = week + 1L,
            sims = map(model,
-                      ~distinct(scores, team) %>%
+                      ~ fit_team_season_df$scores_filtered[[1]]["team"] %>%
                         tidybayes::add_predicted_draws(.x, seed = 42, value = "score") %>%
                         ungroup() %>%
                         nest(data = -team))) %>%
@@ -123,27 +123,27 @@ evaluate_model <- function(scores, schedule = NULL) {
 
     tmp <-  schedule %>%
       filter(week > 1) %>%
-      inner_join(rename(scores, team1 = team, score1 = score), by = c("week", "team1")) %>%
-      left_join(rename(scores, team2 = team, score2 = score), by = c("week", "team2")) %>%
-      left_join(rename(sims, team1 = team, data1 = data), by = c("week", "team1")) %>%
-      left_join(rename(sims, team2 = team, data2 = data), by = c("week", "team2"))
+      inner_join(scores, by = c("week", "team")) %>%
+      left_join(rename(scores, opponent = team, opp_score = score), by = c("week", "opponent")) %>%
+      left_join(sims, by = c("week", "team")) %>%
+      left_join(rename(sims, opponent = team, opp_data = data), by = c("week", "opponent"))
 
   } else {
 
     tmp <- crossing(week = 2:max(scores$week),
-                    team1 = unique(scores$team),
-                    team2 = unique(scores$team)) %>%
-      filter(team1 != team2) %>%
-      left_join(rename(scores, team1 = team, score1 = score), by = c("week", "team1")) %>%
-      left_join(rename(scores, team2 = team, score2 = score), by = c("week", "team2")) %>%
-      left_join(rename(sims, team1 = team, data1 = data), by = c("week", "team1")) %>%
-      left_join(rename(sims, team2 = team, data2 = data), by = c("week", "team2"))
+                    team = unique(scores$team),
+                    opponent = unique(scores$team)) %>%
+      filter(team != opponent) %>%
+      left_join(scores, by = c("week", "team")) %>%
+      left_join(rename(scores, opponent = team, opp_score = score), by = c("week", "opponent")) %>%
+      left_join(sims, by = c("week", "team")) %>%
+      left_join(rename(sims, opponent = team, opp_data = data), by = c("week", "opponent"))
 
   }
 
   tmp %>%
-    mutate(margin = score1 - score2,
-           sims = map2(data1, data2, ~.x - .y),
+    mutate(margin = score - opp_score,
+           sims = map2(data, opp_data, ~.x - .y),
            win_prob = map_dbl(sims, ~convert_wp(.$score)),
            lower50 = map_dbl(sims, ~ quantile(.$score, 0.25)),
            upper50 = map_dbl(sims, ~ quantile(.$score, 0.75)),
@@ -152,7 +152,7 @@ evaluate_model <- function(scores, schedule = NULL) {
            lower95 = map_dbl(sims, ~ quantile(.$score, 0.025)),
            upper95 = map_dbl(sims, ~ quantile(.$score, 0.975)),
            pred_outcome = if_else(win_prob > 50, 1L, 0L),
-           act_outcome = if_else(score1 - score2 > 0, 1L, 0L),
+           act_outcome = if_else(score - opp_score > 0, 1L, 0L),
            correct = if_else(pred_outcome == act_outcome, 1L, 0L),
            range50 = pmap_int(list(margin, lower50, upper50),
                               ~if_else(between(..1, ..2, ..3), 1L, 0L)),
@@ -165,7 +165,7 @@ evaluate_model <- function(scores, schedule = NULL) {
              win_prob == 0 & correct == 0 ~ -1000,
              correct == 1 ~ win_prob,
              TRUE ~ -win_prob)) %>%
-    select(week, team = team1, opp = team2, margin, act_outcome,
+    select(week, team, opp = opponent, margin, act_outcome,
            win_prob, pred_outcome, correct, sim,
            lower50, upper50, range50,
            lower80, upper80, range80,
