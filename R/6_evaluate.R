@@ -108,6 +108,8 @@ evaluate_lineup <- function(lineup_df,
 #' @export
 evaluate_model <- function(fit_team_season_df, schedule = NULL) {
 
+  scores <- slice_tail(fit_team_season_df, n = 1)$scores_filtered[[1]]
+
   sims <- fit_team_season_df %>%
     filter(week < max(fit_team_season_df$week)) %>%
     mutate(week = week + 1L,
@@ -130,9 +132,9 @@ evaluate_model <- function(fit_team_season_df, schedule = NULL) {
 
   } else {
 
-    tmp <- crossing(week = 2:max(scores$week),
-                    team = unique(scores$team),
-                    opponent = unique(scores$team)) %>%
+    tmp <- crossing(week = 2:max(sims$week),
+                    team = unique(sims$team),
+                    opponent = unique(sims$team)) %>%
       filter(team != opponent) %>%
       left_join(scores, by = c("week", "team")) %>%
       left_join(rename(scores, opponent = team, opp_score = score), by = c("week", "opponent")) %>%
