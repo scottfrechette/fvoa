@@ -99,13 +99,19 @@ plot_manager_evaluation <- function(team) {
 # Teams -------------------------------------------------------------------
 
 #' @export
-plot_team_fvoa <- function(fit, .label = T) {
+plot_team_fvoa <- function(fit,
+                           .label = T,
+                           .average = T) {
 
   tmp <- tidybayes::add_epred_draws(distinct(fit$data, team), fit, seed = 42) %>%
     mutate(fvoa = .epred - 115) %>%
     tidybayes::median_qi(fvoa, .width = c(.89, .5)) %>%
     mutate(label = str_glue("{team} ({round(fvoa, 1)})")) %>%
-    arrange(-fvoa)
+    arrange(-fvoa) %>%
+    left_join(as_tibble(fit$data) %>%
+                group_by(team) %>%
+                summarize(avg = mean(score) - 115),
+              by = "team")
 
   p <- tmp %>%
     ggplot(aes(y = reorder(team, fvoa),
@@ -132,6 +138,15 @@ plot_team_fvoa <- function(fit, .label = T) {
                 vjust = -1, alpha = 0.5, size = 3.5) +
       theme(axis.text.y = element_blank(),
             panel.border = element_blank())
+
+  }
+
+  if (.average) {
+
+    p <- p +
+      geom_point(aes(x = avg),
+                 size = 4)
+
   }
 
   return(p)
@@ -161,76 +176,6 @@ plot_joy_plots <- function(scores) {
     guides(fill = "none") +
     theme_fvoa()
 }
-
-#' @export
-plot_simulated_wins <- function(simulated_season_standings) {
-
-  simulated_season_standings %>%
-    group_by(team) %>%
-    mutate(avg = mean(wins)) %>%
-    group_by(team, avg, wins) %>%
-    summarize(pct = n() / 10000,
-              .groups = "drop") %>%
-    ggplot(aes(wins, pct, fill = team)) +
-    geom_col() +
-    geom_vline(aes(xintercept = avg), linetype = 2, color = 'red') +
-    scale_x_continuous(breaks = 1:max(schedule$week), labels = 1:max(schedule$week)) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-    facet_wrap(~ reorder(team, -avg), ncol = 5) +
-    theme_fvoa() +
-    guides(fill = "none") +
-    labs(x = "# Wins",
-         y = "% of Simulations",
-         title = "Simulated Team Win Distribution")
-
-
-}
-
-#' @export
-plot_simulated_weekly_points <- function(simulated_season_scores, n = 100) {
-
-  simulated_season_scores %>%
-    nest(data = -sim) %>%
-    slice_sample(n = n) %>%
-    unnest(data) %>%
-    select(sim, week, team = team1, score = score1) %>%
-    group_by(week, team) %>%
-    mutate(avg = mean(score)) %>%
-    ungroup() %>%
-    mutate(team = fct_reorder(team, avg, .fun = mean, .desc = T)) %>%
-    ggplot(aes(x = week, y = score, color = team, group = sim)) +
-    geom_line(alpha = 0.1) +
-    geom_line(aes(y = avg), size = 1.5) +
-    facet_wrap(~ team) +
-    labs(x = "Week", y = "Score") +
-    theme_fvoa() +
-    guides(color = "none")
-
-}
-
-#' @export
-plot_simulated_cumulative_points <- function(simulated_season_scores, n = 100) {
-
-  simulated_season_scores %>%
-    nest(data = -sim) %>%
-    slice_sample(n = n) %>%
-    unnest(data) %>%
-    select(sim, week, team = team1, score = score1) %>%
-    group_by(sim, team) %>%
-    mutate(points = cumsum(score)) %>%
-    group_by(week, team) %>%
-    mutate(avg = mean(points)) %>%
-    ungroup() %>%
-    mutate(team = fct_reorder(team, avg, .fun = last, .desc = T)) %>%
-    ggplot(aes(x = week, y = points, color = team, group = sim)) +
-    geom_line(alpha = 0.1) +
-    geom_line(aes(y = avg), size = 1.5) +
-    facet_wrap(~ team) +
-    labs(x = "Week", y = "Total Points") +
-    theme_fvoa() +
-    guides(color = "none")
-}
-
 
 #' @export
 plot_h2h_matchup <- function(fit, team1, team2,
@@ -326,11 +271,9 @@ plot_matchups_hm <- function(all_matchups_df) {
 #' @export
 plot_playoff_leverage <- function(sim_standings) {
 
-  library(patchwork)
-
   leverage_week <- unique(sim_standings$leverage_week)
 
-  leverage_plot <- sim_standings %>%
+  sim_standings %>%
     group_by(team, leverage_win) %>%
     summarize(playoffs = mean(playoffs),
               .groups = "drop") %>%
@@ -364,67 +307,6 @@ plot_playoff_leverage <- function(sim_standings) {
           panel.grid.major.y = element_blank(),
           panel.grid.major.x = element_line(color = "white", size = 0.2),
           strip.text = element_text(size =12))
-
-  # Core dataset with the basic labels
-  label_df <- tibble(
-    x = c(15, 15, 77, 101),
-    y = c(1.6, 0.35, 0.35, 1),
-    label = c("Chance to make playoffs with win ", "Chance to make playoffs with loss ", "Leverage", "X%")
-  )
-
-
-  # the horizontal lines
-  seg_df <- tibble(
-    x1 = c(0.2, 90, 0.2, 74.8, 75.3, 90, 103),
-    x2 = c(0.2, 90, 0.2, 74.8, 75.3, 90, 103),
-    y1 = c(1.3, 1.3, rep(.7, 5)),
-    y2 = c(1.61, 1.61, rep(.343, 5))
-
-  )
-
-  # vertical lines
-  seg2_df <- tibble(
-    x1 = c(0.2, 0.2, 75.3),
-    x2 = c(90, 74.8, 103),
-    y1 = c(1.6, .35, .35),
-    y2 = c(1.6, .35, .35)
-  )
-
-  legend_plot <- tibble(
-    x = 75,
-    y = factor("Y"),
-    x2 = 90
-  ) %>%
-    ggplot(aes(x = x, y = y)) +
-    geom_col(aes(x = 100), fill = "white", color = "grey", width = 0.4) +
-    geom_col(aes(x = x2), width = 0.4, color = "#DC143C", fill = "grey") +
-    geom_col(width = 0.4, color = "black", fill = "black") +
-    geom_segment(
-      data = seg_df,
-      aes(x = x1, y = y1, xend = x2, yend = y2),
-      color = c(rep("black", 4), rep("#DC143C", 3)),
-      size = 1
-    ) +
-    geom_segment(
-      data = seg2_df,
-      aes(x = x1, y = y1, xend = x2, yend = y2),
-      color = c("black", "black", "#DC143C"),
-      size = 1
-    ) +
-    geom_label(
-      data = label_df,
-      aes(x = x, y = y, label = label),
-      hjust = 0, size = 6, fontface = "bold", fill = "white",
-      color = c("black", "black", "#DC143C", "#DC143C"),
-      label.size = NA,
-      # family = "Oswald",
-      label.padding = unit(0.05, "lines"),
-    ) +
-    coord_cartesian(ylim = c(0.7, 1.2), xlim = c(0, 108)) +
-    theme_void() +
-    theme(plot.margin = unit(c(0.5, 1.5, 0.5, 1.5), "cm"))
-
-  leverage_plot / legend_plot + plot_layout(heights = c(5, 2))
 
 }
 
@@ -635,6 +517,213 @@ plot_wpag <- function(scores, schedule) {
   #   labs(x = "Difference in WP",
   #        y = NULL,
   #        title = "Different in WPAG v WP")
+
+}
+
+
+# Simulations -------------------------------------------------------------
+
+#' @export
+plot_simulated_wins <- function(simulated_season_standings) {
+
+  simulated_season_standings %>%
+    group_by(team) %>%
+    mutate(avg = mean(wins)) %>%
+    group_by(team, avg, wins) %>%
+    summarize(pct = n() / 10000,
+              .groups = "drop") %>%
+    ggplot(aes(wins, pct, fill = team)) +
+    geom_col() +
+    geom_vline(aes(xintercept = avg), linetype = 2, color = 'red') +
+    scale_x_continuous(breaks = 1:max(schedule$week), labels = 1:max(schedule$week)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    facet_wrap(~ reorder(team, -avg), ncol = 5) +
+    theme_fvoa() +
+    guides(fill = "none") +
+    labs(x = "# Wins",
+         y = "% of Simulations",
+         title = "Simulated Team Win Distribution")
+
+
+}
+
+#' @export
+plot_simulated_weekly_points <- function(simulated_season_scores, n = 100) {
+
+  simulated_season_scores %>%
+    nest(data = -sim) %>%
+    slice_sample(n = n) %>%
+    unnest(data) %>%
+    select(sim, week, team = team1, score = score1) %>%
+    group_by(week, team) %>%
+    mutate(avg = mean(score)) %>%
+    ungroup() %>%
+    mutate(team = fct_reorder(team, avg, .fun = mean, .desc = T)) %>%
+    ggplot(aes(x = week, y = score, color = team, group = sim)) +
+    geom_line(alpha = 0.1) +
+    geom_line(aes(y = avg), size = 1.5) +
+    facet_wrap(~ team) +
+    labs(x = "Week", y = "Score") +
+    theme_fvoa() +
+    guides(color = "none")
+
+}
+
+#' @export
+plot_simulated_cumulative_points <- function(simulated_season_scores, n = 100) {
+
+  simulated_season_scores %>%
+    nest(data = -sim) %>%
+    slice_sample(n = n) %>%
+    unnest(data) %>%
+    select(sim, week, team = team1, score = score1) %>%
+    group_by(sim, team) %>%
+    mutate(points = cumsum(score)) %>%
+    group_by(week, team) %>%
+    mutate(avg = mean(points)) %>%
+    ungroup() %>%
+    mutate(team = fct_reorder(team, avg, .fun = last, .desc = T)) %>%
+    ggplot(aes(x = week, y = points, color = team, group = sim)) +
+    geom_line(alpha = 0.1) +
+    geom_line(aes(y = avg), size = 1.5) +
+    facet_wrap(~ team) +
+    labs(x = "Week", y = "Total Points") +
+    theme_fvoa() +
+    guides(color = "none")
+}
+
+#' @export
+plot_simulated_wins <- function(simulated_standings) {
+
+  simulated_standings %>%
+    add_count(team, wt = wins, name = "total_wins") %>%
+    mutate(team = fct_reorder(team, -total_wins)) %>%
+    count(team, wins) %>%
+    group_by(team) %>%
+    mutate(pct = n / sum(n)) %>%
+    ggplot(aes(wins, pct, fill = team)) +
+    geom_col() +
+    scale_x_continuous(breaks = 1:max(simulated_standings$wins)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    facet_wrap(~ team, nrow = 2) +
+    labs(x = "Simulated Wins", y = NULL) +
+    guides(fill = "none") +
+    theme_fvoa()
+
+}
+
+#' @export
+plot_simulated_rank <- function(simulated_standings) {
+
+  simulated_standings %>%
+    arrange(-wins, -pf) %>%
+    group_by(sim) %>%
+    mutate(rank = 1:n()) %>%
+    ungroup() %>%
+    add_count(team, wt = rank, name = "total_rank") %>%
+    mutate(team = fct_reorder(team, total_rank)) %>%
+    count(team, rank) %>%
+    group_by(team) %>%
+    mutate(pct = n / sum(n)) %>%
+    ggplot(aes(rank, pct, fill = team)) +
+    geom_col() +
+    scale_x_continuous(breaks = 1:n_distinct(simulated_standings$team)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    facet_wrap(~ team, nrow = 2) +
+    labs(x = "Simulated Rank", y = NULL) +
+    guides(fill = "none") +
+    theme_fvoa()
+
+}
+
+#' @export
+plot_simulated_points <- function(simulated_standings) {
+
+  simulated_standings %>%
+    add_count(team, wt = pf, name = "total_points") %>%
+    mutate(team = fct_reorder(team, -total_points),
+           pf_rounded = ceiling(pf / 50) * 50) %>%
+    count(team, pf_rounded) %>%
+    group_by(team) %>%
+    mutate(pct = n / sum(n)) %>%
+    ggplot(aes(pf_rounded, pct, fill = team)) +
+    geom_col() +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    facet_wrap(~team, nrow = 2) +
+    labs(x = "Simulated Points", y = NULL) +
+    guides(fill = "none") +
+    theme_fvoa()
+
+}
+
+#' @export
+plot_schedule_luck <- function(schedule,
+                               scores,
+                               owners,
+                               sims = 100,
+                               tries = 0.1 * sims) {
+
+  owners <- mutate(owners, team_id = 1:row_number())
+
+  sim_schedules <- ffsched::generate_schedules(league_size = league_size,
+                                               weeks = weeks,
+                                               sims = sims,
+                                               seed_init = 42,
+                                               export = FALSE) %>%
+    left_join(rename(owners, team = franchise_name), by = "team_id") %>%
+    left_join(rename(owners, opponent = franchise_name, opponent_id = team_id), by = "opponent_id") %>%
+    select(sim = idx_sim, week, team, opponent) %>%
+    left_join(scores_full, by = c("week", "team")) %>%
+    left_join(rename(scores_full, opponent = team, opp_score = score), by = c("week", "opponent")) %>%
+    mutate(win = score > opp_score)
+
+  sim_schedule_standings <- sim_schedules %>%
+    group_by(sim, team) %>%
+    summarize(wins = sum(win),
+              points = sum(score),
+              .groups = "drop") %>%
+    group_by(sim) %>%
+    arrange(-wins, -points) %>%
+    mutate(rank = 1:n()) %>%
+    ungroup() %>%
+    arrange(sim, rank) %>%
+    count(team, rank)
+
+  sim_schedule_standings_full <- crossing(team = unique(sim_schedule_standings$team),
+                                          rank = 1:n_distinct(sim_schedule_standings$team)) %>%
+    left_join(sim_schedule_standings, by = c("team", "rank")) %>%
+    replace_na(list(n = 0)) %>%
+    mutate(pct = n / sims) %>%
+    left_join(calculate_stats(schedule, scores_full, 'espn') %>%
+                select(team, actual_rank = 6),
+              by = "team") %>%
+    left_join(sim_schedule_standings %>%
+                group_by(team) %>%
+                slice_max(n) %>%
+                ungroup() %>%
+                select(team, sim_rank = rank),
+              by = "team") %>%
+    mutate(team = fct_reorder(team, -sim_rank))
+
+  sim_schedule_standings_full %>%
+    ggplot(aes(y = team, x = rank)) +
+    geom_tile(aes(fill = pct), alpha = 0.5, na.rm = FALSE) +
+    geom_tile(data = distinct(sim_schedule_standings_full, team, rank = actual_rank),
+              fill = NA, color = 'black', size = 3) +
+    geom_text(aes(label = scales::percent(pct, accuracy = 1))) +
+    scale_x_continuous(breaks = 1:league_size, expand = c(0, 0)) +
+    scale_fill_gradient(low = "white", high = "#0072B2") +
+    guides(fill = "none") +
+    theme_minimal() +
+    theme(axis.text.y = element_text(face = "bold"),
+          #axis.text.x = element_text(face = "bold", size = 10),
+          axis.text.x = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank()) +
+    labs(title = 'Simulated standings positions',
+         subtitle = sprintf('Based on %s unique schedules', scales::comma(sims)),
+         x = NULL,
+         y = NULL)
 
 }
 
