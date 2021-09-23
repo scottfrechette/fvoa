@@ -1,6 +1,6 @@
 
 #' @export
-evaluate_lineup <- function(lineup_df,
+evaluate_lineup <- function(team_df,
                             qb = 1,
                             rb = 2,
                             wr = 3,
@@ -15,15 +15,11 @@ evaluate_lineup <- function(lineup_df,
                             transactions = NULL,
                             plot = FALSE) {
 
-  team_col <- names(select(lineup_df, starts_with("team")))
-  lineup_df <- select(lineup_df, league:week,
-                      team = starts_with("team"), score:act_pts)
-  teams <- unique(lineup_df$team)
+  teams <- unique(team_df$team)
 
-  weeks <- unique(lineup_df$week)
+  weeks <- unique(team_df$week)
 
-
-  lineup_df <- lineup_df %>%
+  team_df <- team_df %>%
     mutate(position = case_when(
       position %in% c("DB", "CB", "S") ~ "DB",
       position %in% c("DL", "DE", "DT", "LB") ~ "DL",
@@ -31,16 +27,12 @@ evaluate_lineup <- function(lineup_df,
       TRUE ~ position
     ))
 
-  if("proj" %in% names(lineup_df)) {
-    lineup_df <- lineup_df %>% select(-proj)
-  }
-
   if(!is.null(fa)) {
-    lineup_df <- bind_rows(lineup_df, fa)
+    team_df <- bind_rows(team_df, fa)
   }
 
   if(!is.null(transactions)) {
-    lineup_df <- bind_rows(lineup_df, transactions)
+    team_df <- bind_rows(team_df, transactions)
   }
 
   positions <- tibble(qb, rb, wr, te,
@@ -50,7 +42,7 @@ evaluate_lineup <- function(lineup_df,
     mutate(position = toupper(position))
 
   best_lineup <- crossing(team = teams, week = weeks, positions) %>%
-    mutate(data = list(lineup_df),
+    mutate(data = list(team_df),
            tmp = pmap(list(data, team, week,
                            position, roster_spots),
                       max_points_position)) %>%
@@ -58,51 +50,19 @@ evaluate_lineup <- function(lineup_df,
     select(team, week, position, max_points, player) %>%
     nest(player = player)
 
-  best_lineup <- crossing(team = teams, week = weeks) %>%
+  crossing(team = teams, week = weeks) %>%
     mutate(best_lineup = list(best_lineup),
-           lineup_df = list(lineup_df),
+           team_df = list(team_df),
            rb_wr = rb_wr,
            flex = flex,
-           tmp = pmap(list(best_lineup, lineup_df,
+           tmp = pmap(list(best_lineup, team_df,
                            team, week, rb_wr, flex),
                       max_points_flex)) %>%
     unnest(tmp) %>%
-    select(team, week, max = max_points) %>%
-    left_join(lineup_df %>%
-                select(team, week, score) %>%
-                distinct(),
+    select(team, week, optimal = max_points) %>%
+    left_join(extract_projections(team_df),
               by = c("team", "week"))
 
-  best_lineup_final <- best_lineup %>%
-    mutate(delta = max - score,
-           sign = if_else(delta <= 0, "positive", "negative"),
-           avg = mean(delta))
-
-  if (plot) {
-
-    best_lineup_final %>%
-      ggplot(aes(week, delta, fill = delta)) +
-      geom_bar(stat = 'identity', color = "black") +
-      scale_x_continuous(breaks = 1:max(lineup_df$week),
-                         labels = paste("week", 1:max(lineup_df$week)),
-                         trans = "reverse") +
-      facet_wrap(~reorder(team, avg), ncol = n_distinct(lineup_df$team)/2) +
-      guides(fill=FALSE) +
-      labs(title = "Weekly Manager Evaluation",
-           subtitle = "How many points you left on your bench each week",
-           x = NULL, y = "Lost points") +
-      theme_fvoa() +
-      theme(panel.grid.major.y = element_blank()) +
-      scale_fill_distiller(palette = "YlOrRd", direction = 1) +
-      coord_flip()
-
-  } else {
-
-    best_lineup_final %>%
-      set_names(team_col, "week", "max", "score",
-                "delta", "sign", "avg")
-
-  }
 }
 
 #' @export
@@ -235,7 +195,8 @@ evaluate_tiers <- function(evaluation_df) {
 }
 
 #' @export
-evaluate_projections <- function(projections, schedule = NULL,
+evaluate_projections <- function(projections,
+                                 schedule = NULL,
                                  .summary = FALSE) {
 
   if (!is.null(schedule)) {
@@ -282,27 +243,27 @@ evaluate_projections <- function(projections, schedule = NULL,
 
 # Helper Functions --------------------------------------------------------
 
-max_points_position <- function(lineup_df, .team, .week,
+max_points_position <- function(team_df, .team, .week,
                                 .position, roster_spots) {
 
-  lineup_df %>%
+  team_df %>%
     filter(team == .team,
            week == .week,
            position == .position) %>%
-    top_n(roster_spots, act_pts) %>%
-    mutate(max_points = sum(act_pts)) %>%
+    top_n(roster_spots, points) %>%
+    mutate(max_points = sum(points)) %>%
     select(max_points, player)
 
 }
 
-max_points_flex <- function(best_lineup, lineup_df, .team, .week,
+max_points_flex <- function(best_lineup, team_df, .team, .week,
                             rb_wr = 1, flex = 1) {
 
   best_lineup <- best_lineup %>%
     filter(team == .team,
            week == .week)
 
-  lineup_df <- lineup_df %>%
+  team_df <- team_df %>%
     filter(team %in% c(.team, NA),
            week == .week)
 
@@ -312,11 +273,11 @@ max_points_flex <- function(best_lineup, lineup_df, .team, .week,
       unnest(player) %>%
       select(player)
 
-    best_rb_wr <- lineup_df %>%
+    best_rb_wr <- team_df %>%
       anti_join(chosen_players, by = "player") %>%
       filter(position %in% c("RB", "WR")) %>%
-      top_n(rb_wr, act_pts) %>%
-      mutate(max_points = sum(act_pts),
+      top_n(rb_wr, points) %>%
+      mutate(max_points = sum(points),
              position = "RB_WR") %>%
       nest(player = player) %>%
       select(team, week, position, max_points, player)
@@ -333,11 +294,11 @@ max_points_flex <- function(best_lineup, lineup_df, .team, .week,
       unnest(player) %>%
       select(player)
 
-    best_flex <- lineup_df %>%
+    best_flex <- team_df %>%
       anti_join(chosen_players, by = "player") %>%
       filter(position %in% c("RB", "WR", "TE")) %>%
-      top_n(flex, act_pts) %>%
-      mutate(max_points = sum(act_pts),
+      top_n(flex, points) %>%
+      mutate(max_points = sum(points),
              position = "Flex") %>%
       nest(player = player) %>%
       select(team, week, position, max_points, player)

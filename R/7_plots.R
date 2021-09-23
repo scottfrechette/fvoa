@@ -79,21 +79,59 @@ plot_simulation <- function(simulated_season_df,
 }
 
 #' @export
-plot_manager_evaluation <- function(team) {
+plot_roster_skills <- function(lineup_evaluation) {
+
+  lineup_evaluation %>%
+    group_by(team) %>%
+    mutate(delta = optimal - actual,
+           avg = mean(delta)) %>%
+    ungroup() %>%
+    ggplot(aes(week, delta, fill = delta)) +
+    geom_bar(stat = 'identity', color = "black") +
+    scale_x_continuous(breaks = 1:max(team_df$week),
+                       labels = paste("Week", 1:max(team_df$week)),
+                       trans = "reverse") +
+    facet_wrap(~reorder(team, -avg), ncol = n_distinct(team_df$team)/2) +
+    guides(fill = "none") +
+    labs(title = "Weekly Manager Evaluation",
+         subtitle = "How many points you left on your bench each week",
+         x = NULL, y = "Lost points") +
+    theme_fvoa() +
+    theme(panel.grid.major.y = element_blank()) +
+    scale_fill_distiller(palette = "YlOrRd", direction = 1) +
+    coord_flip()
+
+}
+
+#' @export
+plot_projected_margin <- function(team) {
 
   team %>%
     extract_projections() %>%
     mutate(margin = actual - projected,
            sign = margin >= 0,
+           fill_label = case_when(
+             margin > 0 ~ "positive",
+             margin < 0 ~ "negative",
+             TRUE       ~ "equal"
+           ),
            avg = mean(margin, na.rm = T),
            pos_count = sum(sign)) %>%
-    ggplot(aes(x = week, y = margin, fill = sign)) +
+    ggplot(aes(x = week, y = margin, fill = fill_label)) +
     geom_bar(stat = "identity") +
+    scale_fill_manual(values = c(equal = "#619CFF",
+                                 negative = "#F8766D",
+                                 positive = "#00BA38")) +
+    # scale_x_continuous(breaks = 1:max(team$week)) +
     facet_wrap(~reorder(team, - pos_count), ncol = 5) +
     guides(fill = "none") +
-    labs(title = "Weekly Projection v Actual Results", y = "Margin") +
+    labs(title = "Weekly Projection v Actual Results",
+         x = NULL,
+         y = "Margin") +
     theme_fvoa() +
-    theme(panel.grid.major.y = element_blank())
+    theme(panel.grid.major.y = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank())
 }
 
 # Teams -------------------------------------------------------------------
@@ -483,8 +521,10 @@ plot_wpag <- function(scores, schedule) {
               possible = n(),
               possible_wins = sum(win)) %>%
     mutate(scheduled_wp = scheduled_wins / scheduled,
-           possible_wp = possible_wins / possible) %>%
-    ggplot(aes(scheduled_wp, possible_wp, label = team)) +
+           possible_wp = possible_wins / possible,
+           wp_delta = format_pct(possible_wp - scheduled_wp, 0.1),
+           label = str_glue("{team} ({wp_delta})")) %>%
+    ggplot(aes(scheduled_wp, possible_wp, label = label)) +
     ggrepel::geom_text_repel() +
     geom_point() +
     scale_x_continuous(labels = scales::percent_format(accuracy = 1),
@@ -509,61 +549,6 @@ plot_wpag <- function(scores, schedule) {
          title = "Comparison of Win Percentage and Win Percentage of All Possible Games") +
     theme_fvoa() +
     theme(panel.grid.major.y = element_blank())
-
-  # left_join(scores,
-  #           rename(scores, opponent = team, opp_score = score),
-  #           by = "week") %>%
-  #   filter(team != opponent) %>%
-  #   left_join(mutate(schedule, scheduled = T),
-  #             by = c("week", "team", "opponent")) %>%
-  #   replace_na(list(scheduled = FALSE)) %>%
-  #   mutate(win = score > opp_score,
-  #          scheduled_win = scheduled & win) %>%
-  #   group_by(team) %>%
-  #   summarize(scheduled = sum(scheduled),
-  #             scheduled_wins = sum(scheduled_win),
-  #             possible = n(),
-  #             possible_wins = sum(win)) %>%
-  #   mutate(scheduled_wp = scheduled_wins / scheduled,
-  #          possible_wp = possible_wins / possible) %>%
-  #   ggplot(aes(y = reorder(team, scheduled_wp))) +
-  #   geom_point(aes(x = scheduled_wp), size = 4) +
-  #   geom_point(aes(x = possible_wp), color = "red", size = 4) +
-  #   geom_segment(aes(yend = reorder(team, scheduled_wp),
-  #                    x = scheduled_wp,
-  #                    xend = possible_wp),
-  #                arrow = arrow(),
-  #                size = 1) +
-  #   labs(x = "Win Percentage",
-  #        y = NULL,
-  #        title = "Scheduled WP vs League-Wide WP") +
-  #   theme_fvoa()
-  #
-  # left_join(scores,
-  #           rename(scores, opponent = team, opp_score = score),
-  #           by = "week") %>%
-  #   filter(team != opponent) %>%
-  #   left_join(mutate(schedule, scheduled = T),
-  #             by = c("week", "team", "opponent")) %>%
-  #   replace_na(list(scheduled = FALSE)) %>%
-  #   mutate(win = score > opp_score,
-  #          scheduled_win = scheduled & win) %>%
-  #   group_by(team) %>%
-  #   summarize(scheduled = sum(scheduled),
-  #             scheduled_wins = sum(scheduled_win),
-  #             possible = n(),
-  #             possible_wins = sum(win)) %>%
-  #   mutate(scheduled_wp = scheduled_wins / scheduled,
-  #          possible_wp = possible_wins / possible,
-  #          diff = possible_wp - scheduled_wp) %>%
-  #   arrange(-diff) %>% ggplot(aes(y = reorder(team, diff), x = diff)) +
-  #   geom_point() +
-  #   geom_vline(xintercept = 0, linetype = 2) +
-  #   theme_fvoa() +
-  #   scale_x_continuous(labels = scales::percent_format(accuracy = 1)) +
-  #   labs(x = "Difference in WP",
-  #        y = NULL,
-  #        title = "Different in WPAG v WP")
 
 }
 
@@ -958,24 +943,6 @@ plot_shrinkage <- function(fit) {
     theme(plot.title = ggtext::element_markdown())
 
 }
-
-# sims <- tibble(week = 1:2) %>% #max(scores$week)
-#   mutate(filtered_scores = map(week, ~filter(scores, week <= .x)),
-#          model = map(filtered_scores, fit_team),
-#          sims = map(model,
-#                     ~distinct(scores, team) %>%
-#                       tidybayes::add_predicted_draws(.x, seed = 42, value = "score") %>%
-#                       ungroup() %>%
-#                       nest(data = -team)))
-#
-# sims %>%
-#   select(week, filtered_scores) %>%
-#   mutate(team_avg = map(filtered_scores,
-#                         ~ .x %>%
-#                           group_by(team) %>%
-#                           summarize(avg = mean(score), .groups = "drop"))) %>%
-#   select(week, team_avg) %>%
-#   unnest(team_avg)
 
 # Win/Loss Margin
 # Average win/loss score
