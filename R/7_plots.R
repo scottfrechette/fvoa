@@ -311,9 +311,30 @@ plot_playoff_leverage <- function(sim_standings) {
 }
 
 
+# Luck --------------------------------------------------------------------
 
 #' @export
-plot_quadrant <- function(quadrants, x = c("pf", "pa", "delta")) {
+plot_points_luck <- function(schedule,
+                             scores,
+                             x = c("pf", "pa", "delta")) {
+
+  num_games <- max(scores$week)
+
+  df <- schedule %>%
+    left_join(scores, by = c("week", "team")) %>%
+    left_join(rename(scores, opponent = team, opp_score = score),
+              by = c("week", "opponent")) %>%
+    drop_na() %>%
+    mutate(diff = score - opp_score) %>%
+    select(week, team,
+           score, opp_score,
+           diff) %>%
+    group_by(team) %>%
+    summarise(pf = sum(score),
+              pa = sum(opp_score),
+              delta = sum(diff),
+              wp = sum(diff > 0) / num_games,
+              .groups = "drop")
 
   x <- match.arg(x)
 
@@ -323,8 +344,7 @@ plot_quadrant <- function(quadrants, x = c("pf", "pa", "delta")) {
     x == "delta" ~ "Point Differential"
   )
 
-  quadrants <- select(quadrants,
-                      team = starts_with("team"), wp, x_axis = x)
+  quadrants <- select(df, team = starts_with("team"), wp, x_axis = x)
 
   x_intercept <- case_when(
     x == "pf" ~ mean(quadrants$x_axis),
@@ -375,46 +395,73 @@ plot_quadrant <- function(quadrants, x = c("pf", "pa", "delta")) {
 }
 
 #' @export
-# add win bins?
-plot_exp_wpct <- function(scores, schedule) {
+plot_schedule_luck <- function(schedule,
+                               scores,
+                               owners,
+                               sims = 100,
+                               tries = 0.1 * sims) {
 
-  # wins or win_pct?
-  # pythagorean or other?
+  owners <- mutate(owners, team_id = 1:row_number())
 
-  schedule %>%
-    # filter(week < 2) %>%
-    mutate_at(vars(team1, team2), as.character) %>%
-    inner_join(scores %>%
-                 rename(t1_points = score),
-               by = c("week", "team1" = "team")) %>%
-    inner_join(scores %>%
-                 rename(t2_points = score),
-               by = c("week", "team2" = "team")) %>%
-    group_by(team = team1) %>%
-    summarize(PF = sum(t1_points),
-              PA = sum(t2_points),
-              wins = sum(t1_points > t2_points),
-              games = n()) %>%
-    mutate(exp_wpct_pyth = (PF ^ 2.37 / (PF ^ 2.37 + PA ^ 2.37)),
-           exp_wins = (PF ^ 2.37 / (PF ^ 2.37 + PA ^ 2.37) * games),
-           exp_wpct = 1 / (1 + (PA / PF) ^2),
-           wpct = wins / games) %>%
-    ggplot(aes(wpct, exp_wpct, label = team)) +
-    ggrepel::geom_text_repel() +
-    geom_point() +
-    geom_abline(linetype = 2) +
-    annotate(geom="text", x = 0.15, y = 0.85,
-             color = "grey65",
-             label = "Won less than expected") +
-    annotate(geom="text", x = 0.85, y = 0.15,
-             color = "grey65",
-             label = "Won more than expected") +
-    scale_x_continuous(labels = scales::percent, limits = c(0, 1)) +
-    scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
-    labs(x = "Winning Percentage",
-         y = "Expected Winning Percentage",
-         title = "Real and Expected Win Percentage for each team") +
-    ggthemes::theme_tufte()
+  sim_schedules <- ffsched::generate_schedules(league_size = league_size,
+                                               weeks = weeks,
+                                               sims = sims,
+                                               seed_init = 42,
+                                               export = FALSE) %>%
+    left_join(rename(owners, team = franchise_name), by = "team_id") %>%
+    left_join(rename(owners, opponent = franchise_name, opponent_id = team_id), by = "opponent_id") %>%
+    select(sim = idx_sim, week, team, opponent) %>%
+    left_join(scores_full, by = c("week", "team")) %>%
+    left_join(rename(scores_full, opponent = team, opp_score = score), by = c("week", "opponent")) %>%
+    mutate(win = score > opp_score)
+
+  sim_schedule_standings <- sim_schedules %>%
+    group_by(sim, team) %>%
+    summarize(wins = sum(win),
+              points = sum(score),
+              .groups = "drop") %>%
+    group_by(sim) %>%
+    arrange(-wins, -points) %>%
+    mutate(rank = 1:n()) %>%
+    ungroup() %>%
+    arrange(sim, rank) %>%
+    count(team, rank)
+
+  sim_schedule_standings_full <- crossing(team = unique(sim_schedule_standings$team),
+                                          rank = 1:n_distinct(sim_schedule_standings$team)) %>%
+    left_join(sim_schedule_standings, by = c("team", "rank")) %>%
+    replace_na(list(n = 0)) %>%
+    mutate(pct = n / sims) %>%
+    left_join(calculate_stats(schedule, scores_full, 'espn') %>%
+                select(team, actual_rank = 6),
+              by = "team") %>%
+    left_join(sim_schedule_standings %>%
+                group_by(team) %>%
+                slice_max(n) %>%
+                ungroup() %>%
+                select(team, sim_rank = rank),
+              by = "team") %>%
+    mutate(team = fct_reorder(team, -sim_rank))
+
+  sim_schedule_standings_full %>%
+    ggplot(aes(y = team, x = rank)) +
+    geom_tile(aes(fill = pct), alpha = 0.5, na.rm = FALSE) +
+    geom_tile(data = distinct(sim_schedule_standings_full, team, rank = actual_rank),
+              fill = NA, color = 'black', size = 3) +
+    geom_text(aes(label = scales::percent(pct, accuracy = 1))) +
+    scale_x_continuous(breaks = 1:league_size, expand = c(0, 0)) +
+    scale_fill_gradient(low = "white", high = "#0072B2") +
+    guides(fill = "none") +
+    theme_minimal() +
+    theme(axis.text.y = element_text(face = "bold"),
+          #axis.text.x = element_text(face = "bold", size = 10),
+          axis.text.x = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank()) +
+    labs(title = 'Simulated standings positions',
+         subtitle = sprintf('Based on %s unique schedules', scales::comma(sims)),
+         x = NULL,
+         y = NULL)
 
 }
 
@@ -520,6 +567,49 @@ plot_wpag <- function(scores, schedule) {
 
 }
 
+#' @export
+# add win bins?
+plot_exp_wpct <- function(scores, schedule) {
+
+  # wins or win_pct?
+  # pythagorean or other?
+
+  schedule %>%
+    # filter(week < 2) %>%
+    mutate_at(vars(team1, team2), as.character) %>%
+    inner_join(scores %>%
+                 rename(t1_points = score),
+               by = c("week", "team1" = "team")) %>%
+    inner_join(scores %>%
+                 rename(t2_points = score),
+               by = c("week", "team2" = "team")) %>%
+    group_by(team = team1) %>%
+    summarize(PF = sum(t1_points),
+              PA = sum(t2_points),
+              wins = sum(t1_points > t2_points),
+              games = n()) %>%
+    mutate(exp_wpct_pyth = (PF ^ 2.37 / (PF ^ 2.37 + PA ^ 2.37)),
+           exp_wins = (PF ^ 2.37 / (PF ^ 2.37 + PA ^ 2.37) * games),
+           exp_wpct = 1 / (1 + (PA / PF) ^2),
+           wpct = wins / games) %>%
+    ggplot(aes(wpct, exp_wpct, label = team)) +
+    ggrepel::geom_text_repel() +
+    geom_point() +
+    geom_abline(linetype = 2) +
+    annotate(geom="text", x = 0.15, y = 0.85,
+             color = "grey65",
+             label = "Won less than expected") +
+    annotate(geom="text", x = 0.85, y = 0.15,
+             color = "grey65",
+             label = "Won more than expected") +
+    scale_x_continuous(labels = scales::percent, limits = c(0, 1)) +
+    scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+    labs(x = "Winning Percentage",
+         y = "Expected Winning Percentage",
+         title = "Real and Expected Win Percentage for each team") +
+    ggthemes::theme_tufte()
+
+}
 
 # Simulations -------------------------------------------------------------
 
@@ -653,77 +743,6 @@ plot_simulated_points <- function(simulated_standings) {
     labs(x = "Simulated Points", y = NULL) +
     guides(fill = "none") +
     theme_fvoa()
-
-}
-
-#' @export
-plot_schedule_luck <- function(schedule,
-                               scores,
-                               owners,
-                               sims = 100,
-                               tries = 0.1 * sims) {
-
-  owners <- mutate(owners, team_id = 1:row_number())
-
-  sim_schedules <- ffsched::generate_schedules(league_size = league_size,
-                                               weeks = weeks,
-                                               sims = sims,
-                                               seed_init = 42,
-                                               export = FALSE) %>%
-    left_join(rename(owners, team = franchise_name), by = "team_id") %>%
-    left_join(rename(owners, opponent = franchise_name, opponent_id = team_id), by = "opponent_id") %>%
-    select(sim = idx_sim, week, team, opponent) %>%
-    left_join(scores_full, by = c("week", "team")) %>%
-    left_join(rename(scores_full, opponent = team, opp_score = score), by = c("week", "opponent")) %>%
-    mutate(win = score > opp_score)
-
-  sim_schedule_standings <- sim_schedules %>%
-    group_by(sim, team) %>%
-    summarize(wins = sum(win),
-              points = sum(score),
-              .groups = "drop") %>%
-    group_by(sim) %>%
-    arrange(-wins, -points) %>%
-    mutate(rank = 1:n()) %>%
-    ungroup() %>%
-    arrange(sim, rank) %>%
-    count(team, rank)
-
-  sim_schedule_standings_full <- crossing(team = unique(sim_schedule_standings$team),
-                                          rank = 1:n_distinct(sim_schedule_standings$team)) %>%
-    left_join(sim_schedule_standings, by = c("team", "rank")) %>%
-    replace_na(list(n = 0)) %>%
-    mutate(pct = n / sims) %>%
-    left_join(calculate_stats(schedule, scores_full, 'espn') %>%
-                select(team, actual_rank = 6),
-              by = "team") %>%
-    left_join(sim_schedule_standings %>%
-                group_by(team) %>%
-                slice_max(n) %>%
-                ungroup() %>%
-                select(team, sim_rank = rank),
-              by = "team") %>%
-    mutate(team = fct_reorder(team, -sim_rank))
-
-  sim_schedule_standings_full %>%
-    ggplot(aes(y = team, x = rank)) +
-    geom_tile(aes(fill = pct), alpha = 0.5, na.rm = FALSE) +
-    geom_tile(data = distinct(sim_schedule_standings_full, team, rank = actual_rank),
-              fill = NA, color = 'black', size = 3) +
-    geom_text(aes(label = scales::percent(pct, accuracy = 1))) +
-    scale_x_continuous(breaks = 1:league_size, expand = c(0, 0)) +
-    scale_fill_gradient(low = "white", high = "#0072B2") +
-    guides(fill = "none") +
-    theme_minimal() +
-    theme(axis.text.y = element_text(face = "bold"),
-          #axis.text.x = element_text(face = "bold", size = 10),
-          axis.text.x = element_blank(),
-          panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank()) +
-    labs(title = 'Simulated standings positions',
-         subtitle = sprintf('Based on %s unique schedules', scales::comma(sims)),
-         x = NULL,
-         y = NULL)
 
 }
 

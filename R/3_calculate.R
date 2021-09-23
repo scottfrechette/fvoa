@@ -19,29 +19,6 @@ calculate_fvoa_season <- function(fit_team_season_df) {
 
 }
 
-#' @export
-calculate_quadrants <- function(schedule, scores) {
-
-  num_games <- max(scores$week)
-
-  schedule %>%
-    left_join(scores, by = c("week", "team")) %>%
-    left_join(rename(scores, opponent = team, opp_score = score),
-              by = c("week", "opponent")) %>%
-    drop_na() %>%
-    mutate(diff = score - opp_score) %>%
-    select(week, team,
-           score, opp_score,
-           diff) %>%
-    group_by(team) %>%
-    summarise(pf = sum(score),
-              pa = sum(opp_score),
-              delta = sum(diff),
-              wp = sum(diff > 0) / num_games,
-              .groups = "drop")
-
-}
-
 # Helper Functions --------------------------------------------------------
 
 
