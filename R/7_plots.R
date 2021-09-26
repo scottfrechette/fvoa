@@ -88,10 +88,10 @@ plot_roster_skills <- function(lineup_evaluation) {
     ungroup() %>%
     ggplot(aes(week, delta, fill = delta)) +
     geom_bar(stat = 'identity', color = "black") +
-    scale_x_continuous(breaks = 1:max(team_df$week),
-                       labels = paste("Week", 1:max(team_df$week)),
+    scale_x_continuous(breaks = 1:max(lineup_evaluation$week),
+                       labels = paste("Week", 1:max(lineup_evaluation$week)),
                        trans = "reverse") +
-    facet_wrap(~reorder(team, -avg), ncol = n_distinct(team_df$team)/2) +
+    facet_wrap(~reorder(team, -avg), ncol = n_distinct(lineup_evaluation$team)/2) +
     guides(fill = "none") +
     labs(title = "Weekly Manager Evaluation",
          subtitle = "How many points you left on your bench each week",
@@ -356,9 +356,17 @@ plot_points_luck <- function(schedule,
                              scores,
                              x = c("pf", "pa", "delta")) {
 
+  x <- match.arg(x)
+
+  x_label <- case_when(
+    x == "pf" ~ "Points Scored",
+    x == "pa" ~ "Points Against",
+    x == "delta" ~ "Point Differential"
+  )
+
   num_games <- max(scores$week)
 
-  df <- schedule %>%
+  quadrants <- schedule %>%
     left_join(scores, by = c("week", "team")) %>%
     left_join(rename(scores, opponent = team, opp_score = score),
               by = c("week", "opponent")) %>%
@@ -372,17 +380,8 @@ plot_points_luck <- function(schedule,
               pa = sum(opp_score),
               delta = sum(diff),
               wp = sum(diff > 0) / num_games,
-              .groups = "drop")
-
-  x <- match.arg(x)
-
-  x_label <- case_when(
-    x == "pf" ~ "Points Scored",
-    x == "pa" ~ "Points Against",
-    x == "delta" ~ "Point Differential"
-  )
-
-  quadrants <- select(df, team = starts_with("team"), wp, x_axis = x)
+              .groups = "drop") %>%
+    select(team, wp, x_axis = x)
 
   x_intercept <- case_when(
     x == "pf" ~ mean(quadrants$x_axis),
@@ -423,12 +422,11 @@ plot_points_luck <- function(schedule,
     scale_y_continuous(labels = scales::percent,
                        limits = c(0, 1),
                        expand = c(0, 0)) +
-    # tidyquant::theme_tq() +
-    theme_fvoa() +
     labs(y = "Win Percentage",
          x = x_label) +
-    # tidyquant::scale_color_tq() +
-    guides(color = "none")
+    guides(color = "none") +
+    theme_fvoa() +
+    theme(panel.grid.major.y = element_blank())
 
 }
 
@@ -439,18 +437,18 @@ plot_schedule_luck <- function(schedule,
                                sims = 100,
                                tries = 0.1 * sims) {
 
-  owners <- mutate(owners, team_id = 1:row_number())
+  owners <- mutate(owners, team_id = 1:n())
 
-  sim_schedules <- ffsched::generate_schedules(league_size = league_size,
-                                               weeks = weeks,
+  sim_schedules <- ffsched::generate_schedules(league_size = n_distinct(schedule$team),
+                                               weeks = max(schedule$week),
                                                sims = sims,
                                                seed_init = 42,
                                                export = FALSE) %>%
     left_join(rename(owners, team = franchise_name), by = "team_id") %>%
     left_join(rename(owners, opponent = franchise_name, opponent_id = team_id), by = "opponent_id") %>%
     select(sim = idx_sim, week, team, opponent) %>%
-    left_join(scores_full, by = c("week", "team")) %>%
-    left_join(rename(scores_full, opponent = team, opp_score = score), by = c("week", "opponent")) %>%
+    inner_join(scores, by = c("week", "team")) %>%
+    left_join(rename(scores, opponent = team, opp_score = score), by = c("week", "opponent")) %>%
     mutate(win = score > opp_score)
 
   sim_schedule_standings <- sim_schedules %>%
@@ -486,8 +484,12 @@ plot_schedule_luck <- function(schedule,
     geom_tile(aes(fill = pct), alpha = 0.5, na.rm = FALSE) +
     geom_tile(data = distinct(sim_schedule_standings_full, team, rank = actual_rank),
               fill = NA, color = 'black', size = 3) +
+    geom_tile(data = distinct(sim_schedule_standings_full, team, rank = sim_rank),
+              fill = NA, color = 'black', linetype = 2) +
     geom_text(aes(label = scales::percent(pct, accuracy = 1))) +
-    scale_x_continuous(breaks = 1:league_size, expand = c(0, 0)) +
+    geom_text(aes(label = scales::percent(pct, accuracy = 1), fontface = "bold"),
+              data = filter(sim_schedule_standings_full, rank == actual_rank)) +
+    scale_x_continuous(breaks = 1:n_distinct(schedule$team), expand = c(0, 0)) +
     scale_fill_gradient(low = "white", high = "#0072B2") +
     guides(fill = "none") +
     theme_minimal() +
@@ -504,7 +506,7 @@ plot_schedule_luck <- function(schedule,
 }
 
 #' @export
-plot_wpag <- function(scores, schedule) {
+plot_wpag <- function(schedule, scores) {
 
   left_join(scores,
             rename(scores, opponent = team, opp_score = score),
@@ -781,7 +783,8 @@ plot_model_eval_calibration <- function(evaluation_tiers) {
               percent = round(correct/n * 100, 2)) %>%
     ggplot(aes(tier, percent)) +
     geom_text(aes(label = percent), size = 3,
-              alpha = 0.7, vjust = "outward") +
+              alpha = 0.7, vjust = -1) +
+    geom_point(aes(size = n)) +
     geom_line() +
     geom_abline(color = "red") +
     geom_abline(color = "red", intercept = 10) +
