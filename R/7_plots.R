@@ -41,15 +41,15 @@ plot_fvoa <- function(fvoa_df, x = week, y = fvoa, group = team) {
 
   fvoa_df %>%
     ggplot(aes(!!x_quo, !!y_quo, color = !!group_quo)) +
-    geom_smooth(se=F, color = "darkgrey",
-                # n = n_distinct(!!x_quo),
-                linetype=2, formula = y ~ x, method = "loess") +
+    # geom_smooth(se=F, color = "darkgrey",
+    #             # n = n_distinct(!!x_quo),
+    #             linetype=2, formula = y ~ x, method = "loess") +
     geom_line(alpha = 0.5, size = 1.5) +
     geom_point() +
-    # scale_y_continuous(breaks = pretty_breaks(n = 5)) +
-    scale_y_continuous(breaks = c(-100, -75, -50, -25, 0, 25, 50, 75, 100), limits = c(-100, 100)) +
+    geom_hline(yintercept = 0, color = "darkgrey", linetype = 2) +
     scale_x_continuous(breaks = c(1:15), limits = c(1, 15)) +
-    labs(y = "FVOA", x = "week", title = "weekly FVOA") +
+    scale_y_continuous(breaks = scales::pretty_breaks(n = 5)) +
+    labs(y = "FVOA", x = "Week", title = "Weekly FVOA") +
     guides(color = "none") +
     theme_fvoa()
 }
@@ -81,6 +81,7 @@ plot_simulation <- function(simulated_season_df,
 #' @export
 plot_roster_skills <- function(lineup_evaluation) {
 
+  # Horizontal Bars by Team
   lineup_evaluation %>%
     group_by(team) %>%
     mutate(delta = optimal - actual,
@@ -98,8 +99,46 @@ plot_roster_skills <- function(lineup_evaluation) {
          x = NULL, y = "Lost points") +
     theme_fvoa() +
     theme(panel.grid.major.y = element_blank()) +
-    scale_fill_distiller(palette = "YlOrRd", direction = 1) +
+    # scale_fill_distiller(palette = "YlOrRd", direction = 1) +
+    scale_fill_gradient(low = "white", high = "#0072B2") +
     coord_flip()
+
+  # # Vertical Bars by Team
+  # lineup_evaluation %>%
+  #   group_by(team) %>%
+  #   mutate(delta = optimal - actual,
+  #          avg = mean(delta)) %>%
+  #   ungroup() %>%
+  #   ggplot(aes(week, delta, fill = delta)) +
+  #   geom_bar(stat = 'identity', color = "black") +
+  #   scale_x_continuous(breaks = 1:max(lineup_evaluation$week)) +
+  #   facet_wrap(~reorder(team, -avg), ncol = n_distinct(lineup_evaluation$team)/2) +
+  #   guides(fill = "none") +
+  #   labs(title = "Weekly Manager Evaluation",
+  #        subtitle = "How many points you left on your bench each week",
+  #        x = NULL, y = "Lost points") +
+  #   theme_fvoa() +
+  #   theme(panel.grid.major.y = element_blank()) +
+  #   scale_fill_gradient(low = "white", high = "#0072B2")
+  #
+  # # Score Rank By Week
+  # lineup_evaluation %>%
+  #   mutate(delta = optimal - actual,
+  #          team_score = reorder_within(team, actual, week)) %>%
+  #   ggplot(aes(y = team_score, color = team)) +
+  #   geom_point(aes(x = actual), size = 3) +
+  #   geom_point(aes(x = optimal), size = 3, shape = 8) +
+  #   geom_segment(aes(yend = team_score, x = actual, xend = optimal)) +
+  #   scale_y_reordered() +
+  #   facet_wrap(~ week,
+  #              scales = "free_y",
+  #              ncol = 3,
+  #              labeller = labeller(week = ~paste("Week", .))) +
+  #   labs(x = "Score",
+  #        y = NULL,
+  #        title = "Difference in score and optimal lineup") +
+  #   guides(color = "none") +
+  #   theme_fvoa()
 
 }
 
@@ -774,6 +813,27 @@ plot_model_eval_weekly <- function(evaluation_df) {
 }
 
 #' @export
+plot_model_eval_team <- function(evaluation_df) {
+
+  evaluation_df %>%
+    group_by(team, week) %>%
+    summarize(correct = mean(correct),
+              .groups = "drop") %>%
+    mutate(team = fct_reorder(team, -correct, .fun = mean)) %>%
+    ggplot(aes(x = week, y = correct, fill = team)) +
+    geom_col() +
+    scale_x_continuous(name = "week", breaks = 2:max(evaluation_df$week)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                       limits = c(0, 1), expand = c(0, 0)) +
+    facet_wrap(~ team,
+               ncol = n_distinct(evaluation_df$team) / 2,
+               scales = "free_x") +
+    guides(fill = "none") +
+    theme_fvoa()
+
+}
+
+#' @export
 plot_model_eval_calibration <- function(evaluation_tiers) {
 
   evaluation_tiers %>%
@@ -834,6 +894,23 @@ plot_projection_eval <- function(projection_eval, n_teams = 10) {
     theme(panel.background= element_blank(),
           panel.border = element_blank()) +
     guides(fill = "none")
+}
+
+# Helper Functions --------------------------------------------------------
+
+reorder_within <- function(x, by, within, fun = mean, sep = "___", ...) {
+  new_x <- paste(x, within, sep = sep)
+  stats::reorder(new_x, by, FUN = fun)
+}
+
+scale_x_reordered <- function(..., sep = "___") {
+  reg <- paste0(sep, ".+$")
+  ggplot2::scale_x_discrete(labels = function(x) gsub(reg, "", x), ...)
+}
+
+scale_y_reordered <- function(..., sep = "___") {
+  reg <- paste0(sep, ".+$")
+  ggplot2::scale_y_discrete(labels = function(x) gsub(reg, "", x), ...)
 }
 
 # Experimental ------------------------------------------------------------
