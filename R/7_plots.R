@@ -92,16 +92,17 @@ plot_roster_skills <- function(lineup_evaluation) {
     scale_x_continuous(breaks = 1:max(lineup_evaluation$week),
                        labels = paste("Week", 1:max(lineup_evaluation$week)),
                        trans = "reverse") +
+    scale_y_continuous(expand = c(0, NA)) +
+    scale_fill_gradient(low = "white", high = "#0072B2", limits = c(0, NA)) +
     facet_wrap(~reorder(team, -avg), ncol = n_distinct(lineup_evaluation$team)/2) +
     guides(fill = "none") +
-    labs(title = "Weekly Manager Evaluation",
-         subtitle = "How many points you left on your bench each week",
-         x = NULL, y = "Lost points") +
+    labs(title = "Weekly Roster Evaluation",
+         # subtitle = "How many points did you leave on your bench each week?",
+         x = NULL,
+         y = "Points left on Bench") +
+    coord_flip() +
     theme_fvoa() +
-    theme(panel.grid.major.y = element_blank()) +
-    # scale_fill_distiller(palette = "YlOrRd", direction = 1) +
-    scale_fill_gradient(low = "white", high = "#0072B2") +
-    coord_flip()
+    theme(panel.grid.major.y = element_blank())
 
   # # Vertical Bars by Team
   # lineup_evaluation %>%
