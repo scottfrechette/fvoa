@@ -1,9 +1,9 @@
 #' @export
-calculate_rankings <- function(schedule, fit, league) {
+calculate_rankings <- function(schedule, fit) {
 
   scores <- as_tibble(fit$data)
 
-  calculate_stats(schedule, scores, league = league) %>%
+  calculate_stats(schedule, scores) %>%
     left_join(calculate_fvoa(fit), by = "team") %>%
     left_join(calculate_strength_schedule(schedule, fit), by = "team") %>%
     left_join(calculate_colley(schedule, scores), by = "team")
@@ -21,13 +21,7 @@ calculate_fvoa_season <- function(fit_team_season_df) {
 
 # Helper Functions --------------------------------------------------------
 
-
-calculate_stats <- function(schedule, scores, league = "yahoo") {
-
-  # team_col <- names(select(scores, starts_with("team")))
-  # scores <- select(scores, week, team = starts_with("team"), score)
-
-  rank_col <- paste(league, "rank", sep = "_")
+calculate_stats <- function(schedule, scores) {
 
   schedule %>%
     left_join(scores, by = c("week", "team")) %>%
@@ -48,11 +42,9 @@ calculate_stats <- function(schedule, scores, league = "yahoo") {
               .groups = "drop") %>%
     mutate(wp = wins / (wins + losses)) %>%
     arrange(-wp, -pf) %>%
-    mutate(rank = row_number(),
+    mutate(league_rank = row_number(),
            wp = format_pct(wp, accuracy = 0)) %>%
-    unite(record, c(wins, losses, tie), sep = "-") %>%
-    set_names("team", "pf", "pa",
-              "record", "wp", rank_col)
+    unite(record, c(wins, losses, tie), sep = "-")
 }
 
 calculate_fvoa <- function(fit) {
@@ -77,9 +69,11 @@ calculate_strength_schedule <- function(schedule, fit) {
   fvoa <- calculate_fvoa(fit)
 
   schedule %>%
-    left_join(fvoa, by = c("opponent" = "team")) %>%
+    left_join(select(fvoa, team, fvoa_team = fvoa), by = "team") %>%
+    left_join(select(fvoa, opponent = team, fvoa_opp = fvoa), by = "opponent") %>%
+    mutate(fvoa_diff = fvoa_opp - fvoa_team) %>%
     group_by(team) %>%
-    summarize(sos = round(mean(fvoa), 2)) %>%
+    summarize(sos = round(mean(fvoa_diff), 2)) %>%
     arrange(-sos) %>%
     mutate(sos_rank = min_rank(sos))
 
