@@ -271,22 +271,56 @@ plot_h2h_matchup <- function(fit, team1, team2,
   sim_scores_final <- sim_scores_subset %>%
     spread(team, score) %>%
     select(sim, tm1 = !!team1, tm2 = !!team2) %>%
-    mutate(winner = tm1 > tm2)
+    mutate(margin = tm1 - tm2,
+           winner = tm1 > tm2)
 
-  wp <- sim_scores_final %>%
-    summarize(team1 = sum(winner) / n()) %>%
-    mutate(team2 = 1 - team1) %>%
-    mutate_all(~ paste0(round(.x, 2) * 100, "%"))
+  wp_points <- sim_scores_final %>%
+    summarize(tm1_min = min(tm1),
+              tm1_max = max(tm1),
+              tm2_min = min(tm2),
+              tm2_max = max(tm2))
+
+  wp_labels <- sim_scores_final %>%
+    summarize(tm1_wins = mean(margin > 0),
+              tm1_blowout = mean(margin >= 20),
+              tm1_comfortable = mean(margin >= 5 & margin < 20),
+              tm1_squeaker = mean(margin > 0 & margin < 5),
+              tie = mean(margin == 0),
+              tm2_wins = mean(margin < 0),
+              tm2_blowout = mean(margin <= -20),
+              tm2_comfortable = mean(margin <= -5 & margin > -20),
+              tm2_squeaker = mean(margin < 0 & margin > -5)) %>%
+    mutate(across(everything(), ~scales::percent(.)))
 
   p <- sim_scores_final %>%
     ggplot(aes(tm1, tm2, color = winner)) +
     geom_point(alpha = 0.1) +
     geom_abline(color = "grey30", linetype = 2) +
+    annotate("text",
+             x = wp_points$tm1_min,
+             y = wp_points$tm2_max - 5,
+             hjust = 0,
+             label = str_glue("Squeaker (< 5 points): {wp_labels$tm1_squeaker}\nBlowout (> 20 points): {wp_labels$tm1_blowout}"),
+             color = "grey65") +
+    annotate("text",
+             x = wp_points$tm1_max - 80,
+             y = wp_points$tm2_min + 5,
+             hjust = 0,
+             label = str_glue("Squeaker (< 5 points): {wp_labels$tm2_squeaker}\nBlowout (> 20 points): {wp_labels$tm2_blowout}"),
+             color = "grey65") +
     guides(color = "none") +
-    labs(x = str_glue(team1, " Simulated Scores \n(Win Probability: {wp[[1]]})"),
-         y = str_glue(team2, " Simulated Scores \n(Win Probability: {wp[[2]]})")) +
-    # y = str_glue(team2, " ({wp[[2]]})")) +
+    labs(x = str_glue(team1, " Simulated Scores \n(Win Probability: {wp_labels[['tm1_wins']]})"),
+         y = str_glue(team2, " Simulated Scores \n(Win Probability: {wp_labels[['tm2_wins']]})")) +
     theme_fvoa()
+
+  # p <- sim_scores_final %>%
+  #   ggplot(aes(tm1, tm2, color = winner)) +
+  #   geom_point(alpha = 0.1) +
+  #   geom_abline(color = "grey30", linetype = 2) +
+  #   guides(color = "none") +
+  #   labs(x = str_glue(team1, " Simulated Scores \n(Win Probability: {wp_labels[['tm1_wins']]})"),
+  #        y = str_glue(team2, " Simulated Scores \n(Win Probability: {wp_labels[['tm2_wins']]})")) +
+  #   theme_fvoa()
 
   if (square) {
 
