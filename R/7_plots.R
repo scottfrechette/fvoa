@@ -477,15 +477,17 @@ plot_schedule_luck <- function(schedule,
                                sims = 100,
                                tries = 0.1 * sims) {
 
-  owners <- mutate(owners, team_id = 1:n())
+  owners_tmp <- owners %>%
+    semi_join(scores, by = "team") %>%
+    mutate(team_id = 1:n())
 
   sim_schedules <- ffsched::generate_schedules(league_size = n_distinct(schedule$team),
                                                weeks = max(schedule$week),
                                                sims = sims,
                                                seed_init = 42,
                                                export = FALSE) %>%
-    left_join(rename(owners, team = franchise_name), by = "team_id") %>%
-    left_join(rename(owners, opponent = franchise_name, opponent_id = team_id), by = "opponent_id") %>%
+    left_join(owners_tmp, by = "team_id") %>%
+    left_join(rename(owners_tmp, opponent = team, opponent_id = teamID), by = "opponent_id") %>%
     select(sim = idx_sim, week, team, opponent) %>%
     inner_join(scores, by = c("week", "team")) %>%
     left_join(rename(scores, opponent = team, opp_score = score), by = c("week", "opponent")) %>%
@@ -508,7 +510,7 @@ plot_schedule_luck <- function(schedule,
     left_join(sim_schedule_standings, by = c("team", "rank")) %>%
     replace_na(list(n = 0)) %>%
     mutate(pct = n / sims) %>%
-    left_join(calculate_stats(schedule, scores_full, 'espn') %>%
+    left_join(calculate_stats(schedule, scores, 'espn') %>%
                 select(team, actual_rank = 6),
               by = "team") %>%
     left_join(sim_schedule_standings %>%
@@ -634,7 +636,7 @@ plot_exp_wpct <- function(scores, schedule) {
     labs(x = "Winning Percentage",
          y = "Expected Winning Percentage",
          title = "Real and Expected Win Percentage for each team") +
-    ggthemes::theme_tufte()
+    theme_fvoa()
 
 }
 
