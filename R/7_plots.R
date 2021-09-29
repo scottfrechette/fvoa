@@ -2,11 +2,11 @@
 theme_fvoa <- function(base_size = 12, base_family = "Helvetica") {
   theme(plot.title = element_text(hjust = 0.5),
         panel.background = element_blank(),
-        panel.border = element_rect(fill = NA, colour="grey50"),
+        panel.border = element_rect(fill = NA, colour = "grey50"),
         strip.background = element_rect(color = "black"),
         panel.grid = element_blank(),
         panel.grid.major.y = element_line(color = "grey90", size = 0.2),
-        strip.text = element_text(size =12))
+        strip.text = element_text(size = 12))
 }
 
 
@@ -511,6 +511,11 @@ plot_schedule_luck <- function(schedule,
                                sims = 100,
                                tries = 0.1 * sims) {
 
+  if (!requireNamespace("ffsched", quietly = TRUE)) {
+    stop("Package \"ffsched\" needed for this function to work. Please install it.",
+         call. = FALSE)
+  }
+
   owners_tmp <- owners %>%
     semi_join(scores, by = "team") %>%
     mutate(team_id = 1:n())
@@ -544,7 +549,7 @@ plot_schedule_luck <- function(schedule,
     left_join(sim_schedule_standings, by = c("team", "rank")) %>%
     replace_na(list(n = 0)) %>%
     mutate(pct = n / sims) %>%
-    left_join(calculate_stats(schedule, scores, 'espn') %>%
+    left_join(calculate_stats(schedule, scores) %>%
                 select(team, actual_rank = 6),
               by = "team") %>%
     left_join(sim_schedule_standings %>%
@@ -759,7 +764,9 @@ plot_simulated_wins <- function(simulated_standings) {
     scale_x_continuous(breaks = 1:max(simulated_standings$wins)) +
     scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
     facet_wrap(~ team, nrow = 2) +
-    labs(x = "Simulated Wins", y = NULL) +
+    labs(x = "Simulated Wins",
+         y = NULL,
+         title = str_glue("Projected Wins based on {scales::comma(max(simulated_standings$sim))} Simulations")) +
     guides(fill = "none") +
     theme_fvoa()
 
@@ -783,7 +790,9 @@ plot_simulated_rank <- function(simulated_standings) {
     scale_x_continuous(breaks = 1:n_distinct(simulated_standings$team)) +
     scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
     facet_wrap(~ team, nrow = 2) +
-    labs(x = "Simulated Rank", y = NULL) +
+    labs(x = "Simulated Rank",
+         y = NULL,
+         title = str_glue("Projected Final Rank based on {scales::comma(max(simulated_standings$sim))} Simulations")) +
     guides(fill = "none") +
     theme_fvoa()
 
@@ -800,10 +809,12 @@ plot_simulated_points <- function(simulated_standings) {
     group_by(team) %>%
     mutate(pct = n / sum(n)) %>%
     ggplot(aes(pf_rounded, pct, fill = team)) +
-    geom_col() +
+    geom_col(color = 'white') +
     scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
     facet_wrap(~team, nrow = 2) +
-    labs(x = "Simulated Points", y = NULL) +
+    labs(x = "Simulated Points",
+         y = NULL,
+         title = str_glue("Projected Points based on {scales::comma(max(simulated_standings$sim))} Simulations")) +
     guides(fill = "none") +
     theme_fvoa()
 
@@ -865,6 +876,9 @@ plot_model_eval_team <- function(evaluation_df) {
     facet_wrap(~ team,
                ncol = n_distinct(evaluation_df$team) / 2,
                scales = "free_x") +
+    labs(x = "Week",
+         y = "% Correct",
+         title = "Percent of Possible Matches Predicted Correctly") +
     guides(fill = "none") +
     theme_fvoa()
 
