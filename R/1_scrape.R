@@ -16,6 +16,11 @@ scrape_schedule <- function(league = c("espn", "yahoo"),
 
   } else if (league == "espn") {
 
+    if (!requireNamespace("ffscrapr", quietly = TRUE)) {
+      stop("Package \"ffscrapr\" needed for this function to work. Please install it.",
+           call. = FALSE)
+    }
+
     if(is.null(leagueID)) leagueID <- 299999
 
     ffscrapr::espn_connect(season, leagueID) %>%
@@ -43,6 +48,11 @@ scrape_team <- function(week,
       map_df(~ scrape_yahoo_team(week, .x, leagueID, season))
 
   } else if (league == "espn") {
+
+    if (!requireNamespace("ffscrapr", quietly = TRUE)) {
+      stop("Package \"ffscrapr\" needed for this function to work. Please install it.",
+           call. = FALSE)
+    }
 
     if(is.null(leagueID)) leagueID <- 299999
 
@@ -117,6 +127,11 @@ scrape_player_projections <- function(week,
                        left_join(select(player_table, player, mflID), by = "player"))
 
   } else if (league == "espn") {
+
+    if (!requireNamespace("ffscrapr", quietly = TRUE)) {
+      stop("Package \"ffscrapr\" needed for this function to work. Please install it.",
+           call. = FALSE)
+    }
 
     if(is.null(leagueID)) leagueID <- 299999
 
@@ -441,6 +456,16 @@ scrape_espn_players <- function(week,
                                         "S", "DB", "DP", "DST",
                                         "K", "P", "HC", "FLEX", "EDR"),
                                 projections = TRUE) {
+
+  if (!requireNamespace("ffscrapr", quietly = TRUE)) {
+    stop("Package \"ffscrapr\" needed for this function to work. Please install it.",
+         call. = FALSE)
+  }
+
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    stop("Package \"jsonlite\" needed for this function to work. Please install it.",
+         call. = FALSE)
+  }
 
   conn <- ffscrapr::espn_connect(season = season, league_id = leagueID)
 

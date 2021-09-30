@@ -256,14 +256,30 @@ plot_joy_plots <- function(scores) {
 }
 
 #' @export
-plot_h2h_matchup <- function(fit, team1, team2,
+plot_h2h_matchup <- function(team1, team2,
+                             fit = NULL, draws = NULL,
                              square = FALSE) {
 
-  sim_scores_subset <- as_tibble(fit$data) %>%
-    extract_draws(fit) %>%
-    ungroup() %>%
-    select(sim = .draw, team, score = .prediction) %>%
-    filter(team %in% c(team1, team2))
+  if (!is.null(fit)) {
+
+    sim_scores_subset <- as_tibble(fit$data) %>%
+      extract_draws(fit) %>%
+      ungroup() %>%
+      select(sim = .draw, team, score = .prediction) %>%
+      filter(team %in% c(team1, team2))
+
+  } else if (!is.null(draws)) {
+
+    sim_scores_subset <- draws %>%
+      ungroup() %>%
+      select(sim = .draw, team, score = .prediction) %>%
+      filter(team %in% c(team1, team2))
+
+  } else {
+
+    "ERROR"
+
+  }
 
   lo <- min(sim_scores_subset$score) - 10
   hi <- max(sim_scores_subset$score) + 10
@@ -510,11 +526,6 @@ plot_schedule_luck <- function(schedule,
                                owners,
                                sims = 100,
                                tries = 0.1 * sims) {
-
-  if (!requireNamespace("ffsched", quietly = TRUE)) {
-    stop("Package \"ffsched\" needed for this function to work. Please install it.",
-         call. = FALSE)
-  }
 
   owners_tmp <- owners %>%
     semi_join(scores, by = "team") %>%
@@ -1053,6 +1064,11 @@ plot_pos_contribution <- function(teams,
 }
 
 plot_shrinkage <- function(fit) {
+
+  if (!requireNamespace("ggtext", quietly = TRUE)) {
+    stop("Package \"ggtext\" needed for this function to work. Please install it.",
+         call. = FALSE)
+  }
 
   scores <- as_tibble(fit$data)
 
