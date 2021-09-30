@@ -2,20 +2,49 @@
 # Main Functions ----------------------------------------------------------
 
 #' @export
-compare_teams <- function(fit, team1, team2,
+compare_teams <- function(team1, team2,
+                          fit = NULL, draws = NULL,
                           .output = c("prob", "odds", "spread"),
                           .verbose = FALSE) {
 
   .output <- match.arg(.output)
 
-  sim <- tibble(team = c(team1, team2)) %>%
-    tidybayes::add_predicted_draws(fit, seed = 42) %>%
-    ungroup() %>%
-    select(team, sim = .draw, score = .prediction) %>%
-    spread(team, score) %>%
-    rename(team1 = all_of(team1), team2 = all_of(team2)) %>%
-    mutate(diff = team1 - team2) %>%
-    pull(diff)
+  if (!is.null(fit)) {
+
+    sim <- tibble(team = c(team1, team2)) %>%
+      tidybayes::add_predicted_draws(fit, seed = 42) %>%
+      ungroup() %>%
+      select(team, sim = .draw, score = .prediction) %>%
+      spread(team, score) %>%
+      rename(team1 = all_of(team1), team2 = all_of(team2)) %>%
+      mutate(diff = team1 - team2) %>%
+      pull(diff)
+
+  } else if (!is.null(draws)) {
+
+    sim <- draws %>%
+      filter(team %in% c(team1, team2)) %>%
+      ungroup() %>%
+      select(team, sim = .draw, score = .prediction) %>%
+      spread(team, score) %>%
+      rename(team1 = all_of(team1), team2 = all_of(team2)) %>%
+      mutate(diff = team1 - team2) %>%
+      pull(diff)
+
+  } else {
+
+    "ERROR"
+
+  }
+
+  # sim <- tibble(team = c(team1, team2)) %>%
+  #   tidybayes::add_predicted_draws(fit, seed = 42) %>%
+  #   ungroup() %>%
+  #   select(team, sim = .draw, score = .prediction) %>%
+  #   spread(team, score) %>%
+  #   rename(team1 = all_of(team1), team2 = all_of(team2)) %>%
+  #   mutate(diff = team1 - team2) %>%
+  #   pull(diff)
 
   if(.output == "prob") {
 
