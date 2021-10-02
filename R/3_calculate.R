@@ -21,7 +21,8 @@ calculate_fvoa_season <- function(fit_team_season_df) {
 
 #' @export
 calculate_ffa_projections <- function(ffa_data,
-                                      league = c('espn', 'yahoo')) {
+                                      league = c('espn', 'yahoo'),
+                                      ecr = TRUE) {
 
   if (!requireNamespace("ffanalytics", quietly = TRUE)) {
     stop("Package \"ffanalytics\" needed for this function to work. Please install it.",
@@ -32,19 +33,21 @@ calculate_ffa_projections <- function(ffa_data,
 
   if (league == "espn") {
 
-    ffa_data %>%
+    tmp <- ffa_data %>%
       ffanalytics::projections_table(league_scoring_rules$sx_scoring) %>%
-      ffanalytics::add_player_info() %>%
-      rename(mflID = id)
+      ffanalytics::add_player_info()
 
   } else {
 
-    ffa_data %>%
+    tmp <- ffa_data %>%
       ffanalytics::projections_table(league_scoring_rules$clt_scoring) %>%
-      ffanalytics::add_player_info() %>%
-      rename(mflID = id)
+      ffanalytics::add_player_info()
 
   }
+
+  if (ecr) tmp <- add_ecr(tmp)
+
+  rename(tmp, mflID = id)
 
 }
 

@@ -110,7 +110,7 @@ summarize_draws <- function(draws, .width = 0.95) {
 
 # Experimental ------------------------------------------------------------
 
-fit_player <- function(ffa_src_points) {
+fit_player <- function(player_data) {
 
   # player_fit <- stan_glmer(points ~ position + data_src + (1 | id),
   #                           data = sx_projections_filtered,
@@ -120,7 +120,7 @@ fit_player <- function(ffa_src_points) {
   #                           seed = 42)
 
   stan_glmer(points ~ (1 | position) + (1 | mflID),
-             data = ffa_src_points,
+             data = player_data,
              chains = 4,
              iter = 2500,
              warmup = 1000,

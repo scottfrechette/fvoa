@@ -2,11 +2,11 @@
 league_scoring_rules <- list(
 
   sx_baseline = c(QB = 16,
-                   RB = 48,
-                   WR = 48,
-                   TE = 13,
-                   K = 10,
-                   DST = 10),
+                  RB = 48,
+                  WR = 48,
+                  TE = 13,
+                  K = 10,
+                  DST = 10),
 
   sx_scoring = list(
     pass = list(
@@ -88,11 +88,11 @@ league_scoring_rules <- list(
   ),
 
   clt_baseline = c(QB = 16,
-                    RB = 48,
-                    WR = 48,
-                    TE = 13,
-                    K = 10,
-                    DST = 10),
+                   RB = 48,
+                   WR = 48,
+                   TE = 13,
+                   K = 10,
+                   DST = 10),
 
   clt_scoring = list(
     pass = list(
