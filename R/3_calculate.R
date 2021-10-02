@@ -19,6 +19,84 @@ calculate_fvoa_season <- function(fit_team_season_df) {
 
 }
 
+#' @export
+calculate_ffa_projections <- function(ffa_data,
+                                      league = c('espn', 'yahoo')) {
+
+  if (!requireNamespace("ffanalytics", quietly = TRUE)) {
+    stop("Package \"ffanalytics\" needed for this function to work. Please install it.",
+         call. = FALSE)
+  }
+
+  league <- match.arg(league)
+
+  if (league == "espn") {
+
+    ffa_data %>%
+      ffanalytics::projections_table(league_scoring_rules$sx_scoring) %>%
+      ffanalytics::add_player_info() %>%
+      rename(mflID = id)
+
+  } else {
+
+    ffa_data %>%
+      ffanalytics::projections_table(league_scoring_rules$clt_scoring) %>%
+      ffanalytics::add_player_info() %>%
+      rename(mflID = id)
+
+  }
+
+}
+
+#' @export
+calculate_ffa_src_points <- function(ffa_data,
+                                     league = c('espn', 'yahoo')) {
+
+  if (!requireNamespace("ffanalytics", quietly = TRUE)) {
+    stop("Package \"ffanalytics\" needed for this function to work. Please install it.",
+         call. = FALSE)
+  }
+
+  league <- match.arg(league)
+
+  if (league == "espn") {
+
+    ffa_data %>%
+      ffanalytics:::source_points(league_scoring_rules$sx_scoring) %>%
+      ffanalytics::add_player_info() %>%
+      rename(mflID = id)
+
+  } else {
+
+    ffa_data %>%
+      ffanalytics:::source_points(league_scoring_rules$clt_scoring) %>%
+      ffanalytics::add_player_info() %>%
+      rename(mflID = id)
+
+  }
+
+}
+
+#' @export
+calculate_roster_draws <- function(roster,
+                                   model) {
+
+  player_draws <- roster %>%
+    add_player_data(data = "mflID") %>%
+    add_player_data(data = "position") %>%
+    extract_player_draws(model)
+
+  roster %>%
+    add_player_data(data = "mflID") %>%
+    left_join(player_draws, by = "mflID") %>%
+    filter(roster != "BE") %>%
+    select(team, player, roster, position, sim, pred) %>%
+    group_by(team, sim) %>%
+    summarize(points = sum(pred)) %>%
+    ungroup()
+
+}
+
 # Helper Functions --------------------------------------------------------
 
 calculate_stats <- function(schedule, scores) {

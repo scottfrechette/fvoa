@@ -263,7 +263,7 @@ plot_h2h_matchup <- function(team1, team2,
   if (!is.null(fit)) {
 
     sim_scores_subset <- as_tibble(fit$data) %>%
-      extract_draws(fit) %>%
+      extract_team_draws(fit) %>%
       ungroup() %>%
       select(sim = .draw, team, score = .prediction) %>%
       filter(team %in% c(team1, team2))

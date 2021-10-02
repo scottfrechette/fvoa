@@ -77,12 +77,24 @@ weight_games <- function(x, alpha = 0.15) {
          weight = weekly_weights)
 }
 
-extract_draws <- function(scores, model, ndraws = NULL) {
+extract_team_draws <- function(team_data, model, ndraws = NULL) {
 
-  tidybayes::add_predicted_draws(distinct(scores, team),
+  tidybayes::add_predicted_draws(distinct(team_data, team),
                                  model,
                                  ndraws,
                                  seed = 42)
+
+}
+
+extract_player_draws <- function(player_data, model, ndraws = NULL) {
+
+  player_data %>%
+    distinct(position, mflID) %>%
+    tidybayes::add_predicted_draws(model,
+                                   ndraws,
+                                   seed = 42) %>%
+    ungroup() %>%
+    select(mflID, position, sim = .draw, pred = .prediction)
 
 }
 
@@ -92,5 +104,26 @@ summarize_draws <- function(draws, .width = 0.95) {
     select(team, median = .prediction,
            lower = .lower, upper = .upper) %>%
     arrange(-median)
+
+}
+
+
+# Experimental ------------------------------------------------------------
+
+fit_player <- function(ffa_src_points) {
+
+  # player_fit <- stan_glmer(points ~ position + data_src + (1 | id),
+  #                           data = sx_projections_filtered,
+  #                           chains = 4,
+  #                           iter = 2500,
+  #                           warmup = 1000,
+  #                           seed = 42)
+
+  stan_glmer(points ~ (1 | position) + (1 | mflID),
+             data = ffa_src_points,
+             chains = 4,
+             iter = 2500,
+             warmup = 1000,
+             seed = 42)
 
 }

@@ -238,3 +238,36 @@ spread_league <- function(league_comparison,
   return(out)
 
 }
+
+
+# Experimental ------------------------------------------------------------
+
+compare_teams_player <- function(schedule,
+                                 roster_draws,
+                                 current_week,
+                                 .summarize = T) {
+
+  tmp <- schedule %>%
+    filter(week == current_week) %>%
+    left_join(roster_draws, by = "team") %>%
+    left_join(rename(roster_draws, opponent = team, opponent_points = points),
+              by = c("opponent", "sim"))
+
+  if (.summarize) {
+
+    tmp <- tmp %>%
+    group_by(team, opponent) %>%
+    summarize(score = mean(points),
+              opponent_score = mean(opponent_points),
+              margin = mean(points - opponent_points),
+              win = mean(points > opponent_points),
+              tie = mean(points == opponent_points),
+              loss = mean(points < opponent_points),
+              .groups = "drop") %>%
+    arrange(-win)
+
+  }
+
+  return(tmp)
+
+}
