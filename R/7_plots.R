@@ -183,7 +183,7 @@ plot_team_fvoa <- function(fit,
 
   tmp <- tidybayes::add_epred_draws(distinct(fit$data, team), fit, seed = 42) %>%
     mutate(fvoa = .epred - 115) %>%
-    tidybayes::median_qi(fvoa, .width = c(.89, .5)) %>%
+    tidybayes::median_hdi(fvoa, .width = c(.89, .5)) %>%
     mutate(label = str_glue("{team} ({round(fvoa, 1)})")) %>%
     arrange(-fvoa) %>%
     left_join(as_tibble(fit$data) %>%
@@ -494,13 +494,13 @@ plot_points_luck <- function(schedule,
              x = (max(quadrants$x_axis) - x_intercept) / 2 + x_intercept,
              y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
              size = 8,
-             label = "Unlucky",
+             label = "Underrated",
              color = "grey65") +
     annotate("text",
              x = x_intercept - (x_intercept - min(quadrants$x_axis)) / 2,
              y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
              size = 8,
-             label = "Lucky",
+             label = "Overrated",
              color = "grey65") +
     annotate("text",
              x = x_intercept - (x_intercept - min(quadrants$x_axis)) / 2,
@@ -579,28 +579,28 @@ plot_schedule_luck <- function(schedule,
     geom_tile(data = distinct(sim_schedule_standings_full, team, rank = sim_rank),
               fill = NA, color = 'black', linetype = 2) +
     geom_text(aes(label = scales::percent(pct, accuracy = 1))) +
-    geom_text(aes(label = scales::percent(pct, accuracy = 1), fontface = "bold"),
+    geom_text(aes(label = scales::percent(pct, accuracy = 1)),
               data = filter(sim_schedule_standings_full, rank == actual_rank)) +
     scale_x_continuous(breaks = 1:n_distinct(schedule$team), expand = c(0, 0)) +
     scale_fill_gradient(low = "white", high = "#0072B2") +
     guides(fill = "none") +
     theme_minimal() +
     theme(axis.text.y = element_text(face = "bold"),
-          #axis.text.x = element_text(face = "bold", size = 10),
-          axis.text.x = element_blank(),
+          axis.text.x = element_text(face = "bold", size = 12),
+          # axis.text.x = element_blank(),
           panel.grid.major = element_blank(),
           panel.grid.minor = element_blank()) +
     labs(title = 'Simulated standings positions',
          subtitle = sprintf('Based on %s unique schedules', scales::comma(sims)),
-         x = NULL,
+         x = "Rank",
          y = NULL)
 
 }
 
 #' @export
-plot_wpag <- function(schedule, scores) {
+plot_wp_allplay <- function(schedule, scores) {
 
-  left_join(scores,
+  tmp <- left_join(scores,
             rename(scores, opponent = team, opp_score = score),
             by = "week") %>%
     filter(team != opponent) %>%
@@ -617,32 +617,70 @@ plot_wpag <- function(schedule, scores) {
     mutate(scheduled_wp = scheduled_wins / scheduled,
            possible_wp = possible_wins / possible,
            wp_delta = format_pct(possible_wp - scheduled_wp, 0.1),
-           label = str_glue("{team} ({wp_delta})")) %>%
-    ggplot(aes(scheduled_wp, possible_wp, label = label)) +
-    ggrepel::geom_text_repel() +
-    geom_point() +
+           label = str_glue("{team} ({wp_delta})"),
+           team = fct_reorder(team, scheduled_wp))
+
+  tmp %>%
+    ggplot(aes(x = scheduled_wp,
+               xend = possible_wp,
+               y = team,
+               yend = team)) +
+    geom_segment(aes(color = scheduled_wp < possible_wp),
+                 alpha = 0.2,
+                 size = 1.5) +
+    geom_segment(data = filter(tmp, scheduled_wp != possible_wp),
+                 aes(color = scheduled_wp < possible_wp),
+                 alpha = 0.2,
+                 size = 1.5,
+                 arrow = arrow(type = "open", ends = "last")) +
+    geom_point(data = filter(tmp, scheduled_wp != possible_wp),
+               alpha = 0.5,
+               shape = 21,
+               size = 4) +
+    geom_point(data = filter(tmp, scheduled_wp != possible_wp),
+               aes(x = possible_wp,
+                   color = scheduled_wp < possible_wp),
+               alpha = 0.7,
+               size = 4) +
+    geom_point(data = filter(tmp, scheduled_wp == possible_wp),
+               shape = 21,
+               size = 6) +
     scale_x_continuous(labels = scales::percent_format(accuracy = 1),
                        limits = c(0, 1), expand = c(0, 0)) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1),
-                       limits = c(0, 1), expand = c(0, 0)) +
-    geom_abline(linetype = 2) +
-    annotate("text",
-             x = 0.1,
-             y = 0.9,
-             size = 8,
-             label = "Unlucky",
-             color = "grey65") +
-    annotate("text",
-             x = 0.9,
-             y = 0.2,
-             size = 8,
-             label = "Lucky",
-             color = "grey65") +
-    labs(x = "Win Percentage",
-         y = "Win Percentage All Games",
-         title = "Comparison of Win Percentage and Win Percentage of All Possible Games") +
+    scale_color_manual(values = c("red", "darkgreen")) +
+    labs(y = NULL,
+         x = "Win Percentage",
+         title = "Change in Win Percentage from Scheduled Matchups to All Play") +
+    guides(color = "none") +
     theme_fvoa() +
     theme(panel.grid.major.y = element_blank())
+
+  # tmp %>%
+  #   ggplot(aes(scheduled_wp, possible_wp, label = label)) +
+  #   ggrepel::geom_text_repel() +
+  #   geom_point() +
+  #   scale_x_continuous(labels = scales::percent_format(accuracy = 1),
+  #                      limits = c(0, 1), expand = c(0, 0)) +
+  #   scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+  #                      limits = c(0, 1), expand = c(0, 0)) +
+  #   geom_abline(linetype = 2) +
+  #   annotate("text",
+  #            x = 0.1,
+  #            y = 0.9,
+  #            size = 8,
+  #            label = "Unlucky",
+  #            color = "grey65") +
+  #   annotate("text",
+  #            x = 0.9,
+  #            y = 0.2,
+  #            size = 8,
+  #            label = "Lucky",
+  #            color = "grey65") +
+  #   labs(x = "Scheduled WP",
+  #        y = "All Play WP",
+  #        title = "Comparing Win Percentage for Schedule and All Play") +
+  #   theme_fvoa() +
+  #   theme(panel.grid.major.y = element_blank())
 
 }
 
@@ -889,9 +927,11 @@ plot_model_eval_team <- function(evaluation_df) {
                scales = "free_x") +
     labs(x = "Week",
          y = "% Correct",
-         title = "Percent of Possible Matches Predicted Correctly") +
+         title = "Percent of Possible Matchups Predicted Correctly") +
     guides(fill = "none") +
-    theme_fvoa()
+    theme_fvoa() +
+    theme(panel.grid.major.y = element_line(color = "white", size = 0.2),
+          panel.ontop = T)
 
 }
 
@@ -912,7 +952,8 @@ plot_model_eval_calibration <- function(evaluation_tiers) {
     geom_abline(color = "red", intercept = 10) +
     scale_x_continuous(limits = c(50, 100)) +
     scale_y_continuous(limits = c(30, 100)) +
-    labs(x = "Tier", y = "Percent Correct",
+    labs(x = "Tier",
+         y = "Percent Correct",
          title = "Calibration of Weekly Predictions")
 
 }

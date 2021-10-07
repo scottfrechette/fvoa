@@ -629,7 +629,8 @@ add_player_data <- function(df,
   league <- match.arg(league)
   data <- match.arg(data)
 
-  player_table <- ffscrapr::dp_playerids()
+  player_table <- ffscrapr::dp_playerids() %>%
+    mutate(position = if_else(position == "PK", "K", position))
 
   if (data == "mflID") {
 

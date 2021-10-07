@@ -84,9 +84,14 @@ calculate_ffa_src_points <- function(ffa_data,
 calculate_roster_draws <- function(roster,
                                    model) {
 
-  player_draws <- roster %>%
-    add_player_data(data = "mflID") %>%
-    add_player_data(data = "position") %>%
+  # player_draws <- roster %>%
+  #   add_player_data(data = "mflID") %>%
+  #   add_player_data(data = "position") %>%
+  #   extract_player_draws(model)
+
+  player_draws <- as_tibble(model$data) %>%
+    semi_join(add_player_data(roster), by = "mflID") %>%
+    filter(week == max(week)) %>%
     extract_player_draws(model)
 
   roster %>%

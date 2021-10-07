@@ -109,7 +109,8 @@ compare_league <- function(fit) {
     mutate(sims = map2(data1, data2, ~.x - .y),
            wp = map_dbl(sims, ~mean(.x$score > 0)),
            odds = map_chr(wp, prob_to_odds),
-           spread = map_dbl(sims, ~mean(.x$score))) %>%
+           spread = map_dbl(sims, ~mean(.x$score)),
+           spread = round(spread * 2) / 2) %>%
     select(team1, team2, wp, odds, spread)
 
 }

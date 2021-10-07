@@ -86,18 +86,6 @@ extract_team_draws <- function(team_data, model, ndraws = NULL) {
 
 }
 
-extract_player_draws <- function(player_data, model, ndraws = NULL) {
-
-  player_data %>%
-    distinct(position, mflID) %>%
-    tidybayes::add_predicted_draws(model,
-                                   ndraws,
-                                   seed = 42) %>%
-    ungroup() %>%
-    select(mflID, position, sim = .draw, pred = .prediction)
-
-}
-
 summarize_draws <- function(draws, .width = 0.95) {
 
   tidybayes::median_hdi(draws, .width = .width) %>%
@@ -112,18 +100,24 @@ summarize_draws <- function(draws, .width = 0.95) {
 
 fit_player <- function(player_data) {
 
-  # player_fit <- stan_glmer(points ~ position + data_src + (1 | id),
-  #                           data = sx_projections_filtered,
-  #                           chains = 4,
-  #                           iter = 2500,
-  #                           warmup = 1000,
-  #                           seed = 42)
-
   stan_glmer(points ~ (1 | position) + (1 | mflID),
              data = player_data,
              chains = 4,
              iter = 2500,
              warmup = 1000,
              seed = 42)
+
+}
+
+extract_player_draws <- function(player_data, model, ndraws = NULL) {
+
+  player_data %>%
+    # distinct(mflID, position,) %>%
+    distinct(mflID, position, team, opponent) %>%
+    tidybayes::add_predicted_draws(model,
+                                   ndraws,
+                                   seed = 42) %>%
+    ungroup() %>%
+    select(mflID, position, sim = .draw, pred = .prediction)
 
 }
