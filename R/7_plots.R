@@ -316,13 +316,13 @@ plot_h2h_matchup <- function(team1, team2,
              x = wp_points$tm1_min,
              y = wp_points$tm2_max - 5,
              hjust = 0,
-             label = str_glue("Squeaker (< 5 points): {wp_labels$tm1_squeaker}\nBlowout (> 20 points): {wp_labels$tm1_blowout}"),
+             label = str_glue("Squeaker (<5 points): {wp_labels$tm1_squeaker}\nBlowout (>20 points): {wp_labels$tm1_blowout}"),
              color = "grey65") +
     annotate("text",
              x = wp_points$tm1_max - 80,
              y = wp_points$tm2_min + 5,
              hjust = 0,
-             label = str_glue("Squeaker (< 5 points): {wp_labels$tm2_squeaker}\nBlowout (> 20 points): {wp_labels$tm2_blowout}"),
+             label = str_glue("Squeaker (<5 points): {wp_labels$tm2_squeaker}\nBlowout (>20 points): {wp_labels$tm2_blowout}"),
              color = "grey65") +
     guides(color = "none") +
     labs(x = str_glue(team1, " Simulated Scores \n(Win Probability: {wp_labels[['tm1_wins']]})"),
@@ -486,25 +486,29 @@ plot_points_luck <- function(schedule,
     geom_vline(xintercept = x_intercept) +
     annotate("text",
              x = (max(quadrants$x_axis) - x_intercept) / 2 + x_intercept,
-             y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
+             # y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
+             y = 0.75,
              size = 8,
              label = "Good",
              color = "grey65") +
     annotate("text",
              x = (max(quadrants$x_axis) - x_intercept) / 2 + x_intercept,
-             y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
+             # y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
+             y = 0.25,
              size = 8,
              label = "Underrated",
              color = "grey65") +
     annotate("text",
              x = x_intercept - (x_intercept - min(quadrants$x_axis)) / 2,
-             y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
+             # y = (max(quadrants$wp) - 0.5) / 2 + 0.5,
+             y = 0.75,
              size = 8,
              label = "Overrated",
              color = "grey65") +
     annotate("text",
              x = x_intercept - (x_intercept - min(quadrants$x_axis)) / 2,
-             y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
+             # y = (min(quadrants$wp) - 0.5) / 2 + 0.5,
+             y = 0.25,
              size = 8,
              label = "Bad",
              color = "grey65") +
@@ -537,7 +541,7 @@ plot_schedule_luck <- function(schedule,
                                                seed_init = 42,
                                                export = FALSE) %>%
     left_join(owners_tmp, by = "team_id") %>%
-    left_join(rename(owners_tmp, opponent = team, opponent_id = teamID), by = "opponent_id") %>%
+    left_join(rename(owners_tmp, opponent = team, opponent_id = team_id), by = "opponent_id") %>%
     select(sim = idx_sim, week, team, opponent) %>%
     inner_join(scores, by = c("week", "team")) %>%
     left_join(rename(scores, opponent = team, opp_score = score), by = c("week", "opponent")) %>%
@@ -587,7 +591,6 @@ plot_schedule_luck <- function(schedule,
     theme_minimal() +
     theme(axis.text.y = element_text(face = "bold"),
           axis.text.x = element_text(face = "bold", size = 12),
-          # axis.text.x = element_blank(),
           panel.grid.major = element_blank(),
           panel.grid.minor = element_blank()) +
     labs(title = 'Simulated standings positions',
@@ -617,6 +620,9 @@ plot_wp_allplay <- function(schedule, scores) {
     mutate(scheduled_wp = scheduled_wins / scheduled,
            possible_wp = possible_wins / possible,
            wp_delta = format_pct(possible_wp - scheduled_wp, 0.1),
+           label_x = if_else(scheduled_wp > possible_wp,
+                             (scheduled_wp - possible_wp) / 2 + possible_wp,
+                             (possible_wp - scheduled_wp) / 2 + scheduled_wp),
            label = str_glue("{team} ({wp_delta})"),
            team = fct_reorder(team, scheduled_wp))
 
@@ -645,42 +651,19 @@ plot_wp_allplay <- function(schedule, scores) {
     geom_point(data = filter(tmp, scheduled_wp == possible_wp),
                shape = 21,
                size = 6) +
+    geom_text(aes(x = label_x,
+                  label = wp_delta,
+                  color = scheduled_wp < possible_wp),
+              vjust = -1) +
     scale_x_continuous(labels = scales::percent_format(accuracy = 1),
                        limits = c(0, 1), expand = c(0, 0)) +
     scale_color_manual(values = c("red", "darkgreen")) +
     labs(y = NULL,
          x = "Win Percentage",
-         title = "Change in Win Percentage from Scheduled Matchups to All Play") +
+         title = "Change in Win Percentage from Head-to-Head to All Play") +
     guides(color = "none") +
     theme_fvoa() +
     theme(panel.grid.major.y = element_blank())
-
-  # tmp %>%
-  #   ggplot(aes(scheduled_wp, possible_wp, label = label)) +
-  #   ggrepel::geom_text_repel() +
-  #   geom_point() +
-  #   scale_x_continuous(labels = scales::percent_format(accuracy = 1),
-  #                      limits = c(0, 1), expand = c(0, 0)) +
-  #   scale_y_continuous(labels = scales::percent_format(accuracy = 1),
-  #                      limits = c(0, 1), expand = c(0, 0)) +
-  #   geom_abline(linetype = 2) +
-  #   annotate("text",
-  #            x = 0.1,
-  #            y = 0.9,
-  #            size = 8,
-  #            label = "Unlucky",
-  #            color = "grey65") +
-  #   annotate("text",
-  #            x = 0.9,
-  #            y = 0.2,
-  #            size = 8,
-  #            label = "Lucky",
-  #            color = "grey65") +
-  #   labs(x = "Scheduled WP",
-  #        y = "All Play WP",
-  #        title = "Comparing Win Percentage for Schedule and All Play") +
-  #   theme_fvoa() +
-  #   theme(panel.grid.major.y = element_blank())
 
 }
 
@@ -1129,6 +1112,70 @@ plot_shrinkage <- function(fit) {
          title = "Visualize shrinkage from <span style='color:#0072B2;'>actual</span> and <span style='color:#009E73;'>fitted</span> scores") +
     theme_fvoa() +
     theme(plot.title = ggtext::element_markdown())
+
+}
+
+plot_opponent_fvoa <- function(model) {
+
+  tmp <- as_tibble(model$data) %>%
+    distinct(opponent, position) %>%
+    mutate(home = TRUE,
+           team = "A",
+           player = "A",
+           mflID = "A") %>%
+    add_epred_draws(model, value = "points", seed = 42) %>%
+    median_hdi(.width = c(0.5, 0.89)) %>%
+    mutate(opponent = reorder_within(opponent, points, position, fun = median))
+
+  tmp %>%
+    ggplot(aes(y = opponent,
+               yend = opponent)) +
+    geom_segment(aes(x = .lower, xend = .upper),
+                 data = filter(tmp, .width == 0.89),
+                 size = 0.5, color = "#6497b1") +
+    geom_segment(aes(x = .lower, xend = .upper),
+                 data = filter(tmp, .width == 0.5),
+                 size = 2, color = "#03396c") +
+    geom_point(aes(x = points),
+               size = 4, fill = "#d1e1ec", color = "#011f4b", shape = 21) +
+    scale_y_reordered() +
+    # geom_vline(xintercept = 0, linetype = 2, color = "grey50") +
+    labs(x = "FVOA", y = NULL) +
+    facet_wrap(~ position, scales = "free") +
+    theme_fvoa() +
+    theme(axis.text.y = element_text(face = "bold"),
+          axis.title.x = element_text(face = "bold"),
+          panel.grid.major.y = element_blank())
+
+}
+
+plot_player_fvoa <- function(model, top = 40) {
+
+  tmp <- as_tibble(model$data) %>%
+    distinct(mflID, name, team, position) %>%
+    mutate(opponent = "A", home = TRUE) %>%
+    add_epred_draws(model, value = "points") %>%
+    median_hdi(.width = c(0.5, 0.89)) %>%
+    top_n_group(top, points, position) #%>%
+  # left_join(distinct(weekly_player_data, name, mflID), by = "mflID")
+
+  tmp %>%
+    ggplot(aes(y = reorder(name, points),
+               yend = reorder(name, points))) +
+    geom_segment(aes(x = .lower, xend = .upper),
+                 data = filter(tmp, .width == 0.89),
+                 size = 0.5, color = "#6497b1") +
+    geom_segment(aes(x = .lower, xend = .upper),
+                 data = filter(tmp, .width == 0.5),
+                 size = 2, color = "#03396c") +
+    geom_point(aes(x = points),
+               size = 4, fill = "#d1e1ec", color = "#011f4b", shape = 21) +
+    labs(x = "FVOA", y = NULL) +
+    facet_wrap(~ position, scales = "free") +
+    theme_fvoa() +
+    theme(axis.text.y = element_text(face = "bold"),
+          axis.title.x = element_text(face = "bold"),
+          panel.grid.major.y = element_blank())
 
 }
 
