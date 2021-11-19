@@ -100,10 +100,14 @@ summarize_draws <- function(draws, .width = 0.95) {
 
 fit_player <- function(player_data) {
 
-  stan_glmer(points ~ (1 | position) + (1 | mflID),
+  stan_glmer(points ~ position +
+               (1 | mflID) +
+               (position | team) +
+               (position | opponent),
              data = player_data,
+             family = poisson,
              chains = 4,
-             iter = 2500,
+             iter = 3500,
              warmup = 1000,
              seed = 42)
 
@@ -112,8 +116,8 @@ fit_player <- function(player_data) {
 extract_player_draws <- function(player_data, model, ndraws = NULL) {
 
   player_data %>%
-    # distinct(mflID, position,) %>%
-    distinct(mflID, position, team, opponent) %>%
+    distinct(mflID, position, team) %>%
+    # distinct(mflID, position, team, opponent, home) %>%
     tidybayes::add_predicted_draws(model,
                                    ndraws,
                                    seed = 42) %>%

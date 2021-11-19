@@ -596,6 +596,38 @@ get_espn_players <- function(week,
   return(out)
 }
 
+get_espn_standings <- function(season, leaugeID) {
+
+  left_join(
+    ffscrapr::espn_getendpoint(conn, view = "mTeam", scoringPeriodId = week) %>%
+      pluck("content", "teams") %>%
+      tibble() %>%
+      hoist(1, "teamID" = "id",
+            "draft_proj_rank" = "draftDayProjectedRank",
+            "current_proj_rank" = "currentProjectedRank",
+            "rank" = "playoffSeed", "record") %>%
+      hoist(record, "overall") %>%
+      hoist(overall, "pf" = "pointsFor", "pa" = "pointsAgainst", "wins", "ties", "losses") %>%
+      select(-., -record, -overall),
+    ffscrapr::espn_getendpoint(conn, view = "mStandings", scoringPeriodId = week) %>%
+      pluck("content", "teams") %>%
+      tibble() %>%
+      hoist(1, "teamID" = "id", "currentSimulationResults") %>%
+      hoist(currentSimulationResults,
+            "sim_rank" = "rank",
+            "sim_playoff_pct" = "playoffPct",
+            "modeRecord") %>%
+      hoist(modeRecord, "sim_wins" = "wins", "sim_ties" = "ties", "sim_losses" = "losses") %>%
+      select(-currentSimulationResults, -modeRecord),
+    by = "teamID"
+  ) %>%
+    select(teamID, pf:losses, rank,
+           draft_proj_rank, current_proj_rank,
+           sim_wins:sim_losses, sim_rank:sim_playoff_pct) %>%
+    arrange(rank)
+
+}
+
 get_mfl_ids <- function(season = as.numeric(format(Sys.Date(),'%Y'))) {
 
   httr::GET(str_glue("https://api.myfantasyleague.com/{season}/export?TYPE=players&L=&APIKEY=&DETAILS=1&SINCE=&PLAYERS=&JSON=1")) %>%
@@ -696,6 +728,7 @@ add_player_data <- function(df,
 
   if ("player" %in% names(df)) player_table$player <- NULL
 
-  left_join(df, player_table, by = "playerID")
+  left_join(df, player_table, by = "playerID") %>%
+    mutate(mflID = if_else(mflID == "15432", "15258", mflID))
 
 }

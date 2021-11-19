@@ -5,7 +5,8 @@ calculate_rankings <- function(schedule, fit) {
 
   calculate_stats(schedule, scores) %>%
     left_join(calculate_fvoa(fit), by = "team") %>%
-    left_join(calculate_strength_schedule(schedule, fit), by = "team") %>%
+    left_join(calculate_sos(schedule, fit), by = "team") %>%
+    left_join(calculate_sor(schedule, scores), by = "team") %>%
     left_join(calculate_colley(schedule, scores), by = "team")
 }
 
@@ -80,31 +81,6 @@ calculate_ffa_src_points <- function(ffa_data,
 
 }
 
-#' @export
-calculate_roster_draws <- function(roster,
-                                   model) {
-
-  # player_draws <- roster %>%
-  #   add_player_data(data = "mflID") %>%
-  #   add_player_data(data = "position") %>%
-  #   extract_player_draws(model)
-
-  player_draws <- as_tibble(model$data) %>%
-    semi_join(add_player_data(roster), by = "mflID") %>%
-    filter(week == max(week)) %>%
-    extract_player_draws(model)
-
-  roster %>%
-    add_player_data(data = "mflID") %>%
-    left_join(player_draws, by = "mflID") %>%
-    filter(roster != "BE") %>%
-    select(team, player, roster, position, sim, pred) %>%
-    group_by(team, sim) %>%
-    summarize(points = sum(pred)) %>%
-    ungroup()
-
-}
-
 # Helper Functions --------------------------------------------------------
 
 calculate_stats <- function(schedule, scores) {
@@ -150,18 +126,84 @@ calculate_fvoa <- function(fit) {
 
 }
 
-calculate_strength_schedule <- function(schedule, fit) {
+calculate_sos <- function(schedule, fit) {
 
   fvoa <- calculate_fvoa(fit)
+  scores <- as_tibble(fit$data)
 
-  schedule %>%
+  season_sos <- schedule %>%
     left_join(select(fvoa, team, fvoa_team = fvoa), by = "team") %>%
     left_join(select(fvoa, opponent = team, fvoa_opp = fvoa), by = "opponent") %>%
-    mutate(fvoa_diff = fvoa_opp - fvoa_team) %>%
+    mutate(fvoa_diff = fvoa_team - fvoa_opp) %>%
     group_by(team) %>%
-    summarize(sos = round(mean(fvoa_diff), 2)) %>%
-    arrange(-sos) %>%
-    mutate(sos_rank = min_rank(sos))
+    summarize(sos_favored = sum(fvoa_diff > 0) / n(),
+              sos_margin = round(mean(fvoa_diff), 1)) %>%
+    arrange(-sos_margin) %>%
+    mutate(sos_rank = min_rank(sos_margin))
+
+  played_sos <- schedule %>%
+    filter(week <= max(scores$week)) %>%
+    left_join(select(fvoa, team, fvoa_team = fvoa), by = "team") %>%
+    left_join(select(fvoa, opponent = team, fvoa_opp = fvoa), by = "opponent") %>%
+    mutate(fvoa_diff = fvoa_team - fvoa_opp) %>%
+    group_by(team) %>%
+    summarize(played_sos_favored = sum(fvoa_diff > 0) / n(),
+              played_sos_margin = round(mean(fvoa_diff), 1)) %>%
+    arrange(-played_sos_margin) %>%
+    mutate(played_sos_rank = min_rank(played_sos_margin))
+
+  remaining_sos <- schedule %>%
+    filter(week > max(scores$week)) %>%
+    left_join(select(fvoa, team, fvoa_team = fvoa), by = "team") %>%
+    left_join(select(fvoa, opponent = team, fvoa_opp = fvoa), by = "opponent") %>%
+    mutate(fvoa_diff = fvoa_team - fvoa_opp) %>%
+    group_by(team) %>%
+    summarize(remain_sos_favored = sum(fvoa_diff > 0) / n(),
+              remain_sos_margin = round(mean(fvoa_diff), 1)) %>%
+    arrange(-remain_sos_margin) %>%
+    mutate(remain_sos_rank = min_rank(remain_sos_margin))
+
+  season_sos %>%
+    left_join(played_sos, by = "team") %>%
+    left_join(remaining_sos, by = "team")
+
+}
+
+calculate_sor <- function(schedule, scores, sims = 1e4) {
+
+  set.seed(42)
+
+  schedule %>%
+    left_join(scores, by = c("week", "team")) %>%
+    left_join(scores %>%
+                rename(opponent = team,
+                       opp_score = score),
+              by = c("week", "opponent")) %>%
+    crossing(tibble(sim = 1:sims,
+                    sim_score = rnorm(sims, 110, 10))) %>%
+    drop_na() %>%
+    mutate(tie = score == opp_score,
+           win = score > opp_score,
+           lose = score < opp_score,
+           sim_tie = sim_score == opp_score,
+           sim_win = sim_score > opp_score,
+           sim_lose = sim_score < opp_score) %>%
+    group_by(team, sim) %>%
+    summarize(tie = sum(tie),
+              win = sum(win),
+              lose = sum(lose),
+              sim_tie = sum(sim_tie),
+              sim_win = sum(sim_win),
+              sim_lose = sum(sim_lose),
+              .groups = "drop") %>%
+    mutate(wp = win / (win + lose),
+           sim_wp = sim_win / (sim_win + sim_lose)) %>%
+    count(team, wp, sim_wp) %>%
+    filter(sim_wp >= wp) %>%
+    group_by(team) %>%
+    summarize(sor = sum(n) / sims) %>%
+    arrange(sor) %>%
+    mutate(sor_rank = min_rank(sor))
 
 }
 
@@ -174,7 +216,7 @@ calculate_colley <- function(schedule, scores) {
     left_join(rename(scores, opponent = team, opp_score = score),
               by = c("week", "opponent")) %>%
     mutate(x = if_else(score > opp_score, "W",
-                       if_else(opp_score > score, "L", ""))) %>%
+                       if_else(opp_score > score, "L", "NA"))) %>%
     group_by(team, opponent) %>%
     summarise(x = paste(x, collapse = ""),
               .groups = "drop") %>%
@@ -211,4 +253,69 @@ calculate_colley <- function(schedule, scores) {
               .name_repair = ~"colley_rating") %>%
     mutate(colley_rank = min_rank(-colley_rating)) %>%
     arrange(colley_rank)
+}
+
+# Experimental ------------------------------------------------------------
+
+calculate_roster_draws <- function(roster,
+                                   model) {
+
+  # player_draws <- roster %>%
+  #   add_player_data(data = "mflID") %>%
+  #   add_player_data(data = "position") %>%
+  #   extract_player_draws(model)
+
+  player_draws <- as_tibble(model$data) %>%
+    semi_join(add_player_data(roster), by = "mflID") %>%
+    filter(week == max(week)) %>%
+    distinct(mflID, .keep_all = T) %>%
+    extract_player_draws(model)
+
+  roster %>%
+    add_player_data(data = "mflID") %>%
+    left_join(player_draws, by = "mflID") %>%
+    filter(roster != "BE") %>%
+    select(team, player, roster, position, sim, pred) %>%
+    group_by(team, sim) %>%
+    summarize(points = sum(pred)) %>%
+    ungroup()
+
+}
+
+calculate_roster_draws1 <- function(roster,
+                                    model_norm,
+                                    model_pois) {
+
+  # player_draws <- roster %>%
+  #   add_player_data(data = "mflID") %>%
+  #   add_player_data(data = "position") %>%
+  #   extract_player_draws(model)
+
+  player_draws_norm <- as_tibble(model_norm$data) %>%
+    semi_join(add_player_data(roster), by = "mflID") %>%
+    filter(week == max(week)) %>%
+    distinct(mflID, .keep_all = T) %>%
+    extract_player_draws(model_norm) %>%
+    mutate(pred = as.integer(pred))
+
+  player_draws_pois <- as_tibble(model_pois$data) %>%
+    semi_join(add_player_data(roster), by = "mflID") %>%
+    filter(week == max(week)) %>%
+    distinct(mflID, .keep_all = T) %>%
+    extract_player_draws(model_pois)
+
+  bind_rows(
+    roster %>%
+      add_player_data(data = "mflID") %>%
+      left_join(player_draws_norm, by = "mflID"),
+    roster %>%
+      add_player_data(data = "mflID") %>%
+      left_join(player_draws_pois, by = "mflID")
+  ) %>%
+    filter(roster != "BE") %>%
+    select(team, player, roster, position, sim, pred) %>%
+    group_by(team, sim) %>%
+    summarize(points = sum(pred)) %>%
+    ungroup()
+
 }
