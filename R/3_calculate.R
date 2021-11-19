@@ -137,9 +137,9 @@ calculate_sos <- function(schedule, fit) {
     mutate(fvoa_diff = fvoa_team - fvoa_opp) %>%
     group_by(team) %>%
     summarize(sos_favored = sum(fvoa_diff > 0) / n(),
-              sos_margin = round(mean(fvoa_diff), 1)) %>%
+              sos_margin = round(mean(-fvoa_opp), 1)) %>%
     arrange(-sos_margin) %>%
-    mutate(sos_rank = min_rank(sos_margin))
+    mutate(sos_rank = min_rank(-sos_margin))
 
   played_sos <- schedule %>%
     filter(week <= max(scores$week)) %>%
@@ -148,9 +148,9 @@ calculate_sos <- function(schedule, fit) {
     mutate(fvoa_diff = fvoa_team - fvoa_opp) %>%
     group_by(team) %>%
     summarize(played_sos_favored = sum(fvoa_diff > 0) / n(),
-              played_sos_margin = round(mean(fvoa_diff), 1)) %>%
+              played_sos_margin = round(mean(-fvoa_opp), 1)) %>%
     arrange(-played_sos_margin) %>%
-    mutate(played_sos_rank = min_rank(played_sos_margin))
+    mutate(played_sos_rank = min_rank(-played_sos_margin))
 
   remaining_sos <- schedule %>%
     filter(week > max(scores$week)) %>%
@@ -159,9 +159,9 @@ calculate_sos <- function(schedule, fit) {
     mutate(fvoa_diff = fvoa_team - fvoa_opp) %>%
     group_by(team) %>%
     summarize(remain_sos_favored = sum(fvoa_diff > 0) / n(),
-              remain_sos_margin = round(mean(fvoa_diff), 1)) %>%
+              remain_sos_margin = round(mean(-fvoa_opp), 1)) %>%
     arrange(-remain_sos_margin) %>%
-    mutate(remain_sos_rank = min_rank(remain_sos_margin))
+    mutate(remain_sos_rank = min_rank(-remain_sos_margin))
 
   season_sos %>%
     left_join(played_sos, by = "team") %>%
