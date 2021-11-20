@@ -145,10 +145,13 @@ calculate_sos <- function(schedule, fit) {
     filter(week <= max(scores$week)) %>%
     left_join(select(fvoa, team, fvoa_team = fvoa), by = "team") %>%
     left_join(select(fvoa, opponent = team, fvoa_opp = fvoa), by = "opponent") %>%
+    left_join(rename(scores, opponent = team, opp_score = score), by = c("opponent", "week")) %>%
     mutate(fvoa_diff = fvoa_team - fvoa_opp) %>%
     group_by(team) %>%
     summarize(played_sos_favored = sum(fvoa_diff > 0) / n(),
-              played_sos_margin = round(mean(-fvoa_opp), 1)) %>%
+              played_sos_avg_fvoa = round(mean(-fvoa_opp), 1),
+              played_sos_margin = round(mean(opp_score - 110), 2),
+              played_sos = sum(opp_score > 110) / (sum(opp_score > 110) + sum(opp_score < 110))) %>%
     arrange(-played_sos_margin) %>%
     mutate(played_sos_rank = min_rank(-played_sos_margin))
 
