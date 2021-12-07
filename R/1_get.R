@@ -598,6 +598,8 @@ get_espn_players <- function(week,
 
 get_espn_standings <- function(season, leaugeID) {
 
+  conn <- ffscrapr::espn_connect(season = season, league_id = leagueID)
+
   left_join(
     ffscrapr::espn_getendpoint(conn, view = "mTeam", scoringPeriodId = week) %>%
       pluck("content", "teams") %>%

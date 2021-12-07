@@ -118,7 +118,9 @@ compare_league <- function(fit) {
 #' @export
 compare_current_matchups <- function(schedule,
                                      fit,
-                                     win_prob = NULL) {
+                                     win_prob = NULL,
+                                     quality = FALSE,
+                                     sim_standings = NULL) {
 
   scores <- as_tibble(fit$data)
 
@@ -142,6 +144,7 @@ compare_current_matchups <- function(schedule,
            Line)
 
   if(!is.null(win_prob)) {
+
     current_matchups <- current_matchups %>%
       left_join(win_prob %>%
                   rename(Yahoo = wp),
@@ -150,7 +153,66 @@ compare_current_matchups <- function(schedule,
              FVOA, Yahoo,
              Spread,
              Line)
+
   }
+
+    if (quality) {
+
+      fvoa <- calculate_fvoa(fit)
+
+      fvoa_max <- fvoa %>%
+        slice_head(n = 2) %>%
+        summarize(max = sum(fvoa)) %>%
+        pull()
+
+      fvoa_min  <- fvoa %>%
+        slice_tail(n = 2) %>%
+        summarize(min = sum(fvoa)) %>%
+        pull()
+
+      current_matchups <- current_matchups %>%
+        left_join(select(fvoa, Winner = team, fvoa_winner = fvoa), by = "Winner") %>%
+        left_join(select(fvoa, Loser = team, fvoa_loser = fvoa), by = "Loser") %>%
+        mutate(fvoa_sum = fvoa_winner + fvoa_loser,
+               Quality = round((fvoa_sum - fvoa_min) / (fvoa_max - fvoa_min) * 100)) %>%
+        select(-fvoa_winner, -fvoa_loser, -fvoa_sum)
+
+    }
+
+    if (!is.null(sim_standings)) {
+
+      leverage <- sim_standings %>%
+        group_by(team, leverage_win) %>%
+        summarize(playoffs = mean(playoffs),
+                  .groups = "drop") %>%
+        mutate(leverage_win = if_else(leverage_win == 1, "win", "lose")) %>%
+        spread(leverage_win, playoffs) %>%
+        mutate(leverage = win - lose) %>%
+        arrange(-leverage)
+
+      leverage_max <- leverage %>%
+        slice_head(n = 2) %>%
+        summarize(max = sum(leverage)) %>%
+        pull()
+
+      leverage_min  <- leverage %>%
+        slice_tail(n = 2) %>%
+        summarize(min = sum(leverage)) %>%
+        pull()
+
+      current_matchups <- current_matchups %>%
+        left_join(select(leverage, Winner = team, leverage_winner = leverage), by = "Winner") %>%
+        left_join(select(leverage, Loser = team, leverage_loser = leverage), by = "Loser") %>%
+        mutate(Importance = round((leverage_winner + leverage_loser) / 2 * 100)) %>%
+        select(-leverage_winner, -leverage_loser)
+    }
+
+
+    if(quality & !is.null(sim_standings)) {
+
+      current_matchups <- mutate(current_matchups, Overall = round((Quality + Importance) / 2))
+
+    }
 
   current_matchups
 }

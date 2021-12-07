@@ -194,6 +194,17 @@ evaluate_tiers <- function(evaluation_df) {
 
 }
 
+# TO-DO:
+# Combine league and FVOA projections into evaluate_projections
+# Inputs: schedule, fit, projections
+# Include: week, scheduled flag, team1, team2,
+#          actual scores, actual outcome, actual margin,
+#          league/FVOA projected scores, pred outcomes,
+#          pred margins, correct, win prob, error,
+#          50% range (lower50, upper50, range50),
+#          80% range, 95% range
+# Visualize: weekly % correct and MAE faceted by scheduled; per team
+
 #' @export
 evaluate_projections <- function(projections,
                                  schedule = NULL,
