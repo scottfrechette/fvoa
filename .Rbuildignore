@@ -2,3 +2,6 @@
 ^\.Rproj\.user$
 ^README\.Rmd$
 ^data-raw$
+^fit$
+^R/test\.R$
+^dev$
