@@ -1197,33 +1197,42 @@ fit %>%
 
 # Functions ---------------------------------------------------------------
 
-scores %>%
-  add_predicted_draws(fit, value = "pred") %>%
-  summarize(mae = mean(abs(score - pred)),
+predicted_draws %>%
+  summarize(mean = mean(pred),
+            median = median(pred),
+            sd = sd(pred),
+            mad = mad(pred, constant = 1),
             l50 = quantile(pred, 0.25),
             u50 = quantile(pred, 0.75),
             l80 = quantile(pred, 0.1),
             u80 = quantile(pred, 0.9),
             l95 = quantile(pred, 0.025),
-            u95 = quantile(pred, 0.975)) %>%
-  mutate(within50 = between(score, l50, u50),
+            u95 = quantile(pred, 0.975),
+            .groups = "keep") %>%
+  mutate(center = mean * (robust == FALSE) + median * (robust == TRUE),
+         scale = sd * (robust == FALSE) + mad * (robust == TRUE),
+         error = score - center,
+         error_scaled = error / scale,
+         within50 = between(score, l50, u50),
          within80 = between(score, l80, u80),
          within95 = between(score, l95, u95)) %>%
   ungroup() %>%
-  mutate(sd = sd(score),
-         mae_scaled = mae / sd) %>%
-  summarize(mae = mean(mae),
-            mae_scaled = mean(mae_scaled),
+  summarize(mae = mean(abs(error)),
+            mae_scaled = mean(abs(error_scaled)),
             within50 = mean(within50),
             within80 = mean(within80),
             within95 = mean(within95))
 
 summarize_predicted_draws <- function(predicted_draws,
-                                      truth = score,
-                                      prediction = pred) {
+                                      truth,
+                                      prediction,
+                                      robust = F) {
 
   predicted_draws %>%
-    summarize(mae = mean(abs({{truth}} - {{prediction}})),
+    summarize(mean = mean({{prediction}}),
+              median = median({{prediction}}),
+              sd = sd({{prediction}}),
+              mad = mad({{prediction}}, constant = 1),
               l50 = quantile({{prediction}}, 0.25),
               u50 = quantile({{prediction}}, 0.75),
               l80 = quantile({{prediction}}, 0.1),
@@ -1231,16 +1240,73 @@ summarize_predicted_draws <- function(predicted_draws,
               l95 = quantile({{prediction}}, 0.025),
               u95 = quantile({{prediction}}, 0.975),
               .groups = "keep") %>%
-    mutate(within50 = between({{truth}}, l50, u50),
+    mutate(center = mean * (robust == FALSE) + median * (robust == TRUE),
+           scale = sd * (robust == FALSE) + mad * (robust == TRUE),
+           error = {{truth}} - center,
+           error_scaled = error / scale,
+           within50 = between({{truth}}, l50, u50),
            within80 = between({{truth}}, l80, u80),
            within95 = between({{truth}}, l95, u95)) %>%
     ungroup() %>%
-    mutate(sd = sd({{truth}}),
-           mae_scaled = mae / sd) %>%
-    summarize(mae = mean(mae),
-              mae_scaled = mean(mae_scaled),
+    summarize(mae = mean(abs(error)),
+              mae_scaled = mean(abs(error_scaled)),
               within50 = mean(within50),
               within80 = mean(within80),
               within95 = mean(within95))
 
+}
+
+evaluate_fit_matchups <- function(predicted_draws,
+                                  prediction,
+                                  robust = F,
+                                  verbose = F) {
+
+  predicted_draws <- ungroup(predicted_draws)
+
+  out <- left_join(select(predicted_draws, week, team, score, sim = .draw, pred),
+            select(predicted_draws, week, opp = team, opp_score = score, sim = .draw, opp_pred = pred),
+            by = c("week", "sim")) %>%
+    filter(team != opp) %>%
+    mutate(pred_margin = pred - opp_pred) %>%
+    group_by(week, team, opp) %>%
+    summarize(score = score[1],
+              opp_score = opp_score[1],
+              mean = mean(pred_margin),
+              median = median(pred_margin),
+              sd = sd(pred_margin),
+              mad = mad(pred_margin, constant = 1),
+              wp = mean(pred_margin > 0),
+              margin_obs = mean(score - opp_score),
+              margin_pred = mean(pred_margin),
+              l50 = quantile(pred_margin, 0.25),
+              u50 = quantile(pred_margin, 0.75),
+              l80 = quantile(pred_margin, 0.1),
+              u80 = quantile(pred_margin, 0.9),
+              l95 = quantile(pred_margin, 0.025),
+              u95 = quantile(pred_margin, 0.975),
+              .groups = "keep") %>%
+    mutate(center = mean * (robust == FALSE) + median * (robust == TRUE),
+           scale = sd * (robust == FALSE) + mad * (robust == TRUE),
+           correct = sign(margin_obs) == sign(margin_pred),
+           error = margin_obs - center,
+           error_scaled = error / scale,
+           within50 = between(margin_obs, l50, u50),
+           within80 = between(margin_obs, l80, u80),
+           within95 = between(margin_obs, l95, u95)) %>%
+    ungroup() %>%
+    select(week, team, score,
+           opp, opp_score,
+           wp, margin_pred, margin_obs,
+           correct, error, error_scaled,
+           within50, within80, within95)
+
+  if (!verbose) {out <- summarize(out,
+                                  accuracy = mean(correct),
+                                  mae = mean(abs(error)),
+                                  mae_scaled = mean(abs(error_scaled)),
+                                  within50 = mean(within50),
+                                  within80 = mean(within80),
+                                  within95 = mean(within95))}
+
+  return(out)
 }
