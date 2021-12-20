@@ -77,8 +77,10 @@ simulate_season_standings <- function(simulated_scores) {
               .groups = "drop") %>%
     group_by(sim) %>%
     arrange(-wins, -pf) %>%
-    mutate(playoffs = row_number() <= 4) %>%
-    ungroup()
+    mutate(rank = row_number(),
+           playoffs = rank <= 4) %>%
+    ungroup() %>%
+    arrange(sim, rank)
 
 }
 
