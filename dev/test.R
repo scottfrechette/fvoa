@@ -46,6 +46,65 @@ scores21 <- all_teams %>%
   separate(team_yr,c("team", "yr"), sep = "_") %>%
   select(team, week, score)
 
+# Functions ---------------------------------------------------------------
+
+evaluate_fit_matchups <- function(predicted_draws,
+                                  prediction,
+                                  robust = F,
+                                  verbose = F) {
+
+  predicted_draws <- ungroup(predicted_draws)
+
+  out <- left_join(select(predicted_draws, week, team, score, sim = .draw, {{prediction}}),
+                   select(predicted_draws, week, opp = team, opp_score = score, sim = .draw, opp_pred = {{prediction}}),
+                   by = c("week", "sim")) %>%
+    filter(team != opp) %>%
+    mutate(pred_margin = {{prediction}} - opp_pred) %>%
+    group_by(week, team, opp) %>%
+    summarize(score = score[1],
+              opp_score = opp_score[1],
+              mean = mean(pred_margin),
+              median = median(pred_margin),
+              sd = sd(pred_margin),
+              mad = mad(pred_margin, constant = 1),
+              wp = mean(pred_margin > 0),
+              margin_obs = mean(score - opp_score),
+              margin_pred = mean(pred_margin),
+              l50 = quantile(pred_margin, 0.25),
+              u50 = quantile(pred_margin, 0.75),
+              l80 = quantile(pred_margin, 0.1),
+              u80 = quantile(pred_margin, 0.9),
+              l95 = quantile(pred_margin, 0.025),
+              u95 = quantile(pred_margin, 0.975),
+              .groups = "keep") %>%
+    mutate(center = mean * (robust == FALSE) + median * (robust == TRUE),
+           scale = sd * (robust == FALSE) + mad * (robust == TRUE),
+           correct = sign(margin_obs) == sign(margin_pred),
+           error = margin_obs - center,
+           error_scaled = error / scale,
+           within50 = between(margin_obs, l50, u50),
+           within80 = between(margin_obs, l80, u80),
+           within95 = between(margin_obs, l95, u95)) %>%
+    ungroup() %>%
+    select(week, team, score,
+           opp, opp_score,
+           wp, margin_pred, margin_obs,
+           correct, error, error_scaled,
+           within50, within80, within95)
+
+  if (!verbose) {out <- summarize(out,
+                                  accuracy = mean(correct),
+                                  mae = mean(abs(error)),
+                                  mae_scaled = mean(abs(error_scaled)),
+                                  within50 = mean(within50),
+                                  within80 = mean(within80),
+                                  within95 = mean(within95))}
+
+  return(out)
+}
+
+
+
 # Simulated point trees ---------------------------------------------------
 
 fit <- fit_model(filter(scores, week <= 6))
@@ -557,7 +616,7 @@ fit1 <- brm(score ~ 0 + Intercept + s(week, by = team),
             warmup = 1250,
             chains = 4,
             cores = 4,
-            file = "data/fit1",
+            file = "dev/fit1",
             control = list(adapt_delta = 0.99))
 
 fit2 <- brm(score ~ 0 + Intercept + s(week, by = team) + (1 | team),
@@ -569,7 +628,7 @@ fit2 <- brm(score ~ 0 + Intercept + s(week, by = team) + (1 | team),
             warmup = 1250,
             chains = 4,
             cores = 4,
-            file = 'data/fit2',
+            file = 'dev/fit2',
             control = list(adapt_delta = 0.99))
 
 fit3 <- brm(score ~ 0 + intercept + (1 | team),
@@ -581,7 +640,7 @@ fit3 <- brm(score ~ 0 + intercept + (1 | team),
             warmup = 1250,
             chains = 4,
             cores = 4,
-            file = 'data/fit3',
+            file = 'dev/fit3',
             control = list(adapt_delta = 0.99))
 
 fit4 <- brm(score ~ s(week, by = team) + (1 | team),
@@ -593,7 +652,7 @@ fit4 <- brm(score ~ s(week, by = team) + (1 | team),
             warmup = 1250,
             chains = 4,
             cores = 4,
-            file = 'data/fit4',
+            file = 'dev/fit4',
             control = list(adapt_delta = 0.99))
 
 fit5 <- brm(score ~ s(week, by = team),
@@ -605,7 +664,7 @@ fit5 <- brm(score ~ s(week, by = team),
             warmup = 1250,
             chains = 4,
             cores = 4,
-            file = 'data/fit5',
+            file = 'dev/fit5',
             control = list(adapt_delta = 0.99))
 
 fit6 <- brm(score ~ (week | team),
@@ -617,7 +676,7 @@ fit6 <- brm(score ~ (week | team),
             warmup = 1250,
             chains = 4,
             cores = 4,
-            file = 'data/fit6',
+            file = 'dev/fit6',
             control = list(adapt_delta = 0.99))
 
 fit7 <- brm(score ~ week + I(week^2) + (week + I(week^2) | team),
@@ -629,7 +688,7 @@ fit7 <- brm(score ~ week + I(week^2) + (week + I(week^2) | team),
             warmup = 1250,
             chains = 4,
             cores = 4,
-            file = 'data/fit7',
+            file = 'dev/fit7',
             control = list(adapt_delta = 0.99))
 
 fit8 <- brm(score ~ week + I(week^2) + I(week^3) + (week + I(week^2) + I(week^3) | team),
@@ -641,7 +700,7 @@ fit8 <- brm(score ~ week + I(week^2) + I(week^3) + (week + I(week^2) + I(week^3)
             warmup = 1250,
             chains = 4,
             cores = 4,
-            file = 'data/fit8',
+            file = 'dev/fit8',
             control = list(adapt_delta = 0.99))
 
 fit9 <- brm(score ~ week + I(week^2) + (week + I(week^2) | team),
@@ -653,7 +712,7 @@ fit9 <- brm(score ~ week + I(week^2) + (week + I(week^2) | team),
             warmup = 1250,
             chains = 4,
             cores = 4,
-            file = 'data/fit9',
+            file = 'dev/fit9',
             control = list(adapt_delta = 0.99))
 
 fit10 <- brm(score ~ 0 + Intercept + week + (week | team),
@@ -665,7 +724,7 @@ fit10 <- brm(score ~ 0 + Intercept + week + (week | team),
              warmup = 1250,
              chains = 4,
              cores = 4,
-             file = 'data/fit10',
+             file = 'dev/fit10',
              control = list(adapt_delta = 0.99))
 
 fit11 <- brm(score ~ 0 + Intercept + week + (week | team),
@@ -681,7 +740,7 @@ fit11 <- brm(score ~ 0 + Intercept + week + (week | team),
              warmup = 1250,
              chains = 4,
              cores = 4,
-             file = 'data/fit11',
+             file = 'dev/fit11',
              control = list(adapt_delta = 0.99))
 
 fit12 <- brm(score ~ 0 + Intercept + week + I(week^2) + (week + I(week^2) | team),
@@ -697,7 +756,7 @@ fit12 <- brm(score ~ 0 + Intercept + week + I(week^2) + (week + I(week^2) | team
             warmup = 1250,
             chains = 4,
             cores = 4,
-            file = 'data/fit12',
+            file = 'dev/fit12',
             file_refit = "on_change",
             control = list(adapt_delta = 0.99))
 
@@ -715,7 +774,7 @@ fit13 <- update(fit12,
                 warmup = 1250,
                 chains = 4,
                 cores = 4,
-                file = 'data/fit13',
+                file = 'dev/fit13',
                 control = list(adapt_delta = 0.99))
 
 fit14 <- update(fit12,
@@ -732,7 +791,7 @@ fit14 <- update(fit12,
                 warmup = 1250,
                 chains = 4,
                 cores = 4,
-                file = 'data/fit14',
+                file = 'dev/fit14',
                 control = list(adapt_delta = 0.99))
 
 fit15 <- update(fit12,
@@ -749,7 +808,7 @@ fit15 <- update(fit12,
                 warmup = 1250,
                 chains = 4,
                 cores = 4,
-                file = 'data/fit15',
+                file = 'dev/fit15',
                 control = list(adapt_delta = 0.99))
 
 # fit21 <- update(fit12, newdata = scores21, cores = 4)
@@ -778,8 +837,8 @@ round(model_weights(fit1, fit2, fit3, fit4, fit5, fit6, fit7, fit8, fit9, fit10,
 
 performance::compare_performance(fit1, fit2, fit3, fit4, fit5, fit6, fit7, fit8, fit9, fit10, fit11, fit12, fit13, fit14, fit15)
 
-mdl <- fit14
-s <- scores
+mdl <- fit_arma1
+s <- train21
 
 pp_check(mdl, ndraws = 50)
 prior_summary(mdl)
@@ -812,7 +871,7 @@ predicted_draws(mdl, s, value = 'pred') %>%
   stat_pointinterval(aes(y = pred)) +
   facet_wrap(~ team)
 
-crossing(week = 11:15,
+  crossing(week = 14:15,
          team = unique(s$team)) %>%
   add_predicted_draws(mdl, value = 'pred') %>%
   ggplot(aes(week, pred)) +
@@ -895,7 +954,7 @@ fit_hist1 <- brm(score ~ 0 + Intercept + season + week + (week | team_yr),
                  warmup = 1250,
                  chains = 4,
                  cores = 4,
-                 file = 'data/fit_hist1',
+                 file = 'dev/fit_hist1',
                  control = list(adapt_delta = 0.99))
 
 fit_hist2 <- brm(score ~ 0 + Intercept + season + week + I(week^2) + (week + I(week^2) | team_yr),
@@ -911,7 +970,7 @@ fit_hist2 <- brm(score ~ 0 + Intercept + season + week + I(week^2) + (week + I(w
                  warmup = 1250,
                  chains = 4,
                  cores = 4,
-                 file = 'data/fit_hist2',
+                 file = 'dev/fit_hist2',
                  control = list(adapt_delta = 0.99))
 
 fit_hist3 <- brm(score ~ 0 + Intercept + season + poly(week, 3) + (poly(week, 3) | team_yr),
@@ -927,7 +986,7 @@ fit_hist3 <- brm(score ~ 0 + Intercept + season + poly(week, 3) + (poly(week, 3)
                  warmup = 1250,
                  chains = 4,
                  cores = 4,
-                 file = 'data/fit_hist3',
+                 file = 'dev/fit_hist3',
                  control = list(adapt_delta = 0.99))
 
 fit_hist4 <- brm(score ~ 0 + Intercept + season + poly(week, 2) + (poly(week, 2) | team_yr),
@@ -943,7 +1002,7 @@ fit_hist4 <- brm(score ~ 0 + Intercept + season + poly(week, 2) + (poly(week, 2)
                  warmup = 1250,
                  chains = 4,
                  cores = 4,
-                 file = 'data/fit_hist4',
+                 file = 'dev/fit_hist4',
                  control = list(adapt_delta = 0.99))
 
 fit_hist5 <- brm(score ~ 0 + Intercept + season + week + I(week^2) + I(week^3) + (week + I(week^2) + I(week^3) | team_yr),
@@ -959,7 +1018,7 @@ fit_hist5 <- brm(score ~ 0 + Intercept + season + week + I(week^2) + I(week^3) +
                  warmup = 1250,
                  chains = 4,
                  cores = 4,
-                 file = 'data/fit_hist5',
+                 file = 'dev/fit_hist5',
                  control = list(adapt_delta = 0.99))
 
 model_performance(fit_hist1, fit_hist2, fit_hist3, fit_hist4)
@@ -1171,7 +1230,7 @@ save(scores21, all_teams, train21, train_hist,
      fit_21_week_poly2, fit_hist_week_poly2,
      fit_21_week_poly3, fit_hist_week_poly3,
      mdl_comp,
-     file = "data/week_test.rda")
+     file = "dev/week_test.rda")
 
 evaluate_fit <- function(fit) {
 
@@ -1195,118 +1254,109 @@ fit %>%
 }
 
 
-# Functions ---------------------------------------------------------------
+# Weekly Interaction ------------------------------------------------------
 
-predicted_draws %>%
-  summarize(mean = mean(pred),
-            median = median(pred),
-            sd = sd(pred),
-            mad = mad(pred, constant = 1),
-            l50 = quantile(pred, 0.25),
-            u50 = quantile(pred, 0.75),
-            l80 = quantile(pred, 0.1),
-            u80 = quantile(pred, 0.9),
-            l95 = quantile(pred, 0.025),
-            u95 = quantile(pred, 0.975),
-            .groups = "keep") %>%
-  mutate(center = mean * (robust == FALSE) + median * (robust == TRUE),
-         scale = sd * (robust == FALSE) + mad * (robust == TRUE),
-         error = score - center,
-         error_scaled = error / scale,
-         within50 = between(score, l50, u50),
-         within80 = between(score, l80, u80),
-         within95 = between(score, l95, u95)) %>%
+fit_int1 <- rstanarm::stan_glm(score ~ 0 + week * team,
+                               data = train21,
+                               prior = rstanarm::student_t(10, 115, 10),
+                               seed = 42,
+                               iter = 3750,
+                               warmup = 1250,
+                               chains = 4,
+                               cores = 4)
+
+fit_int2 <- rstanarm::stan_glm(score ~ 0 + poly(week, 2) * team,
+                               data = train21,
+                               prior = rstanarm::student_t(10, 115, 10),
+                               seed = 42,
+                               iter = 3750,
+                               warmup = 1250,
+                               chains = 4,
+                               cores = 4)
+
+fit_int3 <- rstanarm::stan_glm(score ~ 0 + poly(week, 3) * team,
+                               data = train21,
+                               prior = rstanarm::student_t(10, 115, 10),
+                               seed = 42,
+                               iter = 3750,
+                               warmup = 1250,
+                               chains = 4,
+                               cores = 4)
+
+fit_int4 <- brm(score ~ 0 + week * team,
+                data = train21,
+                family = gaussian,
+                prior = c(prior(student_t(10, 115, 10), class = 'b'),
+                          prior(normal(0, 12), class = 'b', coef = "week"),
+                          # prior(exponential(0.04166667), class = 'sd'),
+                          prior(exponential(0.04166667), class = 'sigma')),
+                seed = 42,
+                iter = 3750,
+                warmup = 1250,
+                chains = 4,
+                cores = 4,
+                control = list(adapt_delta = 0.99))
+
+fit_int5 <- update(fit_int4,
+                   formula = score ~ 0 + poly(week, 2) * team,
+                   newdata= train21)
+
+fit_int6 <- update(fit_int4,
+                   formula = score ~ 0 + poly(week, 3) * team,
+                   newdata= train21)
+
+mdl <- fit_int6
+
+scores21 %>%
+  filter(week == max(week)) %>%
+  add_predicted_draws(mdl, value = "pred") %>%
+  rename(sim = .draw) %>%
   ungroup() %>%
-  summarize(mae = mean(abs(error)),
-            mae_scaled = mean(abs(error_scaled)),
-            within50 = mean(within50),
-            within80 = mean(within80),
-            within95 = mean(within95))
+  evaluate_fit()
 
-summarize_predicted_draws <- function(predicted_draws,
-                                      truth,
-                                      prediction,
-                                      robust = F) {
+scores21 %>%
+  filter(week == max(week)) %>%
+  add_predicted_draws(mdl, value = "pred") %>%
+  summarize_predicted_draws(score, pred)
 
-  predicted_draws %>%
-    summarize(mean = mean({{prediction}}),
-              median = median({{prediction}}),
-              sd = sd({{prediction}}),
-              mad = mad({{prediction}}, constant = 1),
-              l50 = quantile({{prediction}}, 0.25),
-              u50 = quantile({{prediction}}, 0.75),
-              l80 = quantile({{prediction}}, 0.1),
-              u80 = quantile({{prediction}}, 0.9),
-              l95 = quantile({{prediction}}, 0.025),
-              u95 = quantile({{prediction}}, 0.975),
-              .groups = "keep") %>%
-    mutate(center = mean * (robust == FALSE) + median * (robust == TRUE),
-           scale = sd * (robust == FALSE) + mad * (robust == TRUE),
-           error = {{truth}} - center,
-           error_scaled = error / scale,
-           within50 = between({{truth}}, l50, u50),
-           within80 = between({{truth}}, l80, u80),
-           within95 = between({{truth}}, l95, u95)) %>%
-    ungroup() %>%
-    summarize(mae = mean(abs(error)),
-              mae_scaled = mean(abs(error_scaled)),
-              within50 = mean(within50),
-              within80 = mean(within80),
-              within95 = mean(within95))
 
-}
+# ARMA --------------------------------------------------------------------
 
-evaluate_fit_matchups <- function(predicted_draws,
-                                  prediction,
-                                  robust = F,
-                                  verbose = F) {
+fit_arma1 <- brm(score ~ 0 + team + arma(week, team),
+                 data = train21,
+                 family = gaussian,
+                 prior = c(prior(student_t(10, 115, 10), class = 'b'),
+                           prior(normal(0, 2), class = 'ma'),
+                           prior(normal(0, 2), class = 'ar'),
+                           prior(exponential(0.04166667), class = 'sigma')),
+                 seed = 42,
+                 iter = 4000,
+                 warmup = 1500,
+                 chains = 4,
+                 cores = 4,
+                 file = 'dev/fit_arma1',
+                 control = list(adapt_delta = 0.999,
+                                max_treedepth = 15))
 
-  predicted_draws <- ungroup(predicted_draws)
 
-  out <- left_join(select(predicted_draws, week, team, score, sim = .draw, pred),
-            select(predicted_draws, week, opp = team, opp_score = score, sim = .draw, opp_pred = pred),
-            by = c("week", "sim")) %>%
-    filter(team != opp) %>%
-    mutate(pred_margin = pred - opp_pred) %>%
-    group_by(week, team, opp) %>%
-    summarize(score = score[1],
-              opp_score = opp_score[1],
-              mean = mean(pred_margin),
-              median = median(pred_margin),
-              sd = sd(pred_margin),
-              mad = mad(pred_margin, constant = 1),
-              wp = mean(pred_margin > 0),
-              margin_obs = mean(score - opp_score),
-              margin_pred = mean(pred_margin),
-              l50 = quantile(pred_margin, 0.25),
-              u50 = quantile(pred_margin, 0.75),
-              l80 = quantile(pred_margin, 0.1),
-              u80 = quantile(pred_margin, 0.9),
-              l95 = quantile(pred_margin, 0.025),
-              u95 = quantile(pred_margin, 0.975),
-              .groups = "keep") %>%
-    mutate(center = mean * (robust == FALSE) + median * (robust == TRUE),
-           scale = sd * (robust == FALSE) + mad * (robust == TRUE),
-           correct = sign(margin_obs) == sign(margin_pred),
-           error = margin_obs - center,
-           error_scaled = error / scale,
-           within50 = between(margin_obs, l50, u50),
-           within80 = between(margin_obs, l80, u80),
-           within95 = between(margin_obs, l95, u95)) %>%
-    ungroup() %>%
-    select(week, team, score,
-           opp, opp_score,
-           wp, margin_pred, margin_obs,
-           correct, error, error_scaled,
-           within50, within80, within95)
 
-  if (!verbose) {out <- summarize(out,
-                                  accuracy = mean(correct),
-                                  mae = mean(abs(error)),
-                                  mae_scaled = mean(abs(error_scaled)),
-                                  within50 = mean(within50),
-                                  within80 = mean(within80),
-                                  within95 = mean(within95))}
+mdl <- fit_arma1
 
-  return(out)
-}
+scores21 %>%
+  filter(week == max(week)) %>%
+  add_predicted_draws(mdl, value = "pred") %>%
+  # rename(sim = .draw) %>%
+  ungroup() %>%
+  evaluate_fit_matchups(pred)
+
+scores21 %>%
+  filter(week == max(week)) %>%
+  add_predicted_draws(mdl, value = "pred") %>%
+  summarize_predicted_draws(score, pred)
+
+tst <- tibble(week = 2:14) %>%
+  mutate(train = map(week, ~filter(scores21, week < .x)),
+         test = map(week, ~filter(scores21, week == .x)),
+         model = map(train, ~update(fit_arma1, newdata = .x, cores = 4)),
+         draws = map2(test, model, ~add_predicted_draws(.x, .y, value = "pred")),
+         accuracy = map(draws, ~evaluate_fit_matchups(.x, pred)))

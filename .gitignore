@@ -3,3 +3,6 @@
 .RData
 .Ruserdata
 R/notes.Rmd
+dev/*.rds
+dev/*.rda
+dev/*.rdata
