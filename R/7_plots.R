@@ -805,28 +805,73 @@ plot_simulated_wins <- function(simulated_standings) {
 }
 
 #' @export
-plot_simulated_rank <- function(simulated_standings) {
+plot_simulated_rank <- function(simulated_standings,
+                                type = c("facet","grid")) {
 
-  simulated_standings %>%
-    arrange(-wins, -pf) %>%
-    group_by(sim) %>%
-    mutate(rank = 1:n()) %>%
-    ungroup() %>%
-    add_count(team, wt = rank, name = "total_rank") %>%
-    mutate(team = fct_reorder(team, total_rank)) %>%
-    count(team, rank) %>%
-    group_by(team) %>%
-    mutate(pct = n / sum(n)) %>%
-    ggplot(aes(rank, pct, fill = team)) +
-    geom_col() +
-    scale_x_continuous(breaks = 1:n_distinct(simulated_standings$team)) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-    facet_wrap(~ team, nrow = 2) +
-    labs(x = "Simulated Rank",
-         y = NULL,
-         title = str_glue("Projected Final Rank based on {scales::comma(max(simulated_standings$sim))} Simulations")) +
-    guides(fill = "none") +
-    theme_fvoa()
+  type <- match.arg(type)
+
+  if (type == "facet") {
+
+    simulated_standings %>%
+      arrange(-wins, -pf) %>%
+      group_by(sim) %>%
+      mutate(rank = 1:n()) %>%
+      ungroup() %>%
+      add_count(team, wt = rank, name = "total_rank") %>%
+      mutate(team = fct_reorder(team, total_rank)) %>%
+      count(team, rank) %>%
+      group_by(team) %>%
+      mutate(pct = n / sum(n)) %>%
+      ggplot(aes(rank, pct, fill = team)) +
+      geom_col() +
+      scale_x_continuous(breaks = 1:n_distinct(simulated_standings$team)) +
+      scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+      facet_wrap(~ team, nrow = 2) +
+      labs(x = "Simulated Rank",
+           y = NULL,
+           title = str_glue("Projected Final Rank based on {scales::comma(max(simulated_standings$sim))} Simulations")) +
+      guides(fill = "none") +
+      theme_fvoa()
+
+  } else {
+
+    simulated_standings %>%
+      group_by(team) %>%
+      count(rank) %>%
+      mutate(pct = n / sum(n),
+             overall_rank = sum(rank * n)) %>%
+      ungroup() %>%
+      mutate(team = fct_reorder(team, -overall_rank),
+             rank = recode(rank,
+                           "1" = "1st",
+                           "2" = "2nd",
+                           "3" = "3rd",
+                           "4" = "4th",
+                           '5' = "5th",
+                           "6" = "6th",
+                           "7" = "7th",
+                           "8" = "8th",
+                           "9" = "9th",
+                           "10" = "10th"),
+             rank = fct_inorder(rank)) %>%
+      select(team, rank, pct) %>%
+      complete(team, rank, fill = list(pct = 0)) %>%
+      mutate(pct_label = format_pct(pct, accuracy = 0)) %>%
+      ggplot(aes(rank, team)) +
+      geom_tile(aes(fill = pct), alpha = 0.5, na.rm = F) +
+      geom_text(aes(label = pct_label)) +
+      scale_fill_gradient(low = "white", high = "#0072B2", limits = c(0, NA)) +
+      guides(fill = 'none') +
+      theme_minimal() +
+      theme(axis.text.y = element_text(face = "bold"),
+            axis.text.x = element_text(face = "bold", size = 12),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank()) +
+      labs(y = NULL,
+           x = "Chances of Final Rank",
+           title = str_glue("Projected Final Rank based on {scales::comma(max(simulated_standings$sim))} Simulations"))
+
+  }
 
 }
 
@@ -1178,8 +1223,3 @@ plot_player_fvoa <- function(model, top = 40) {
           panel.grid.major.y = element_blank())
 
 }
-
-# Win/Loss Margin
-# Average win/loss score
-# Do teams play you harder?: opponents scores vs their average
-# Team by team heatmap
