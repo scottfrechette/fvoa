@@ -221,18 +221,18 @@ compare_current_matchups <- function(schedule,
 compare_playoff_teams <- function(fit, seed1, seed2, seed3, seed4) {
 
   # Simulate each possible matchup
-  t1r1 <- compare_teams(fit, seed1, seed4)/100
-  t2r1 <- compare_teams(fit, seed2, seed3)/100
-  t3r1 <- compare_teams(fit, seed3, seed2)/100
-  t4r1 <- compare_teams(fit, seed4, seed1)/100
-  t12r2 <- compare_teams(fit, seed1, seed2)/100
-  t13r2 <- compare_teams(fit, seed1, seed3)/100
-  t21r2 <- compare_teams(fit, seed2, seed1)/100
-  t24r2 <- compare_teams(fit, seed2, seed4)/100
-  t31r2 <- compare_teams(fit, seed3, seed1)/100
-  t34r2 <- compare_teams(fit, seed3, seed4)/100
-  t42r2 <- compare_teams(fit, seed4, seed2)/100
-  t43r2 <- compare_teams(fit, seed4, seed3)/100
+  t1r1 <- compare_teams(seed1, seed4, fit)/100
+  t2r1 <- compare_teams(seed2, seed3, fit)/100
+  t3r1 <- compare_teams(seed3, seed2, fit)/100
+  t4r1 <- compare_teams(seed4, seed1, fit)/100
+  t12r2 <- compare_teams(seed1, seed2, fit)/100
+  t13r2 <- compare_teams(seed1, seed3, fit)/100
+  t21r2 <- compare_teams(seed2, seed1, fit)/100
+  t24r2 <- compare_teams(seed2, seed4, fit)/100
+  t31r2 <- compare_teams(seed3, seed1, fit)/100
+  t34r2 <- compare_teams(seed3, seed4, fit)/100
+  t42r2 <- compare_teams(seed4, seed2, fit)/100
+  t43r2 <- compare_teams(seed4, seed3, fit)/100
 
   # Calculate chances of each team winning both rounds
   t1wins <- round(t1r1 * ((t2r1 * t12r2) + (t3r1 * t13r2)), 4) * 100
