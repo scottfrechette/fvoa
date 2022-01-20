@@ -13,12 +13,12 @@ sx_con <- espn_connect(2021, 299999)
 owners <- ff_franchises(sx_con) %>%
   select(teamID = 1, team = 2)
 
-schedule <- get_schedule(season = 2020) %>%
+schedule <- get_schedule(season = 2021) %>%
   left_join(owners, by = "teamID") %>%
   left_join(rename(owners, opponent = team, opponentID = teamID), by = "opponentID") %>%
   select(week, team, opponent)
 
-teams <- map_df(1:15, ~get_team(week = ., season = 2020)) %>%
+teams <- map_df(1:15, ~get_team(week = ., season = 2021)) %>%
   left_join(owners, by = "teamID") %>%
   select(week, team, score:points)
 
@@ -1360,3 +1360,54 @@ tst <- tibble(week = 2:14) %>%
          model = map(train, ~update(fit_arma1, newdata = .x, cores = 4)),
          draws = map2(test, model, ~add_predicted_draws(.x, .y, value = "pred")),
          accuracy = map(draws, ~evaluate_fit_matchups(.x, pred)))
+
+# Normal-Normal -----------------------------------------------------------
+
+ema <- function (x, window = NULL, ratio = NULL) {
+
+  if (is.null(window) & is.null(ratio)) stop("Please select either window or ratio")
+
+  if (!is.null(window)) ratio <- 2 / (window + 1)
+
+  c(stats::filter(x = x * ratio, filter = 1 - ratio, method = "recursive", init = x[1]))
+
+}
+
+emsd <- function(x, window = NULL, ratio = NULL, initial = 15) {
+
+  if (is.null(window) & is.null(ratio)) stop("Please select either window or ratio")
+
+  if (!is.null(window)) ratio <- 2 / (window + 1)
+
+  n <- length(x)
+
+  out <- sapply(
+    1:n,
+    function(i, x, ratio) {
+      y <- x[1:i]
+      m <- length(y)
+      weights <- (1 - ratio)^((m - 1):0)
+      ewma <- sum(weights * y) / sum(weights)
+      bias <- sum(weights)^2 / (sum(weights)^2 - sum(weights^2))
+      ewmsd <- sqrt(bias * sum(weights * (y - ewma)^2) / sum(weights))
+    },
+    x = x,
+    ratio = ratio
+  )
+
+  out[1] <- initial
+
+  out
+}
+
+scores_full %>%
+  group_by(team) %>%
+  mutate(avg = ema(score, 4),
+         sd = emsd(score, 4),
+         post = pmap(list(avg, sd, week),
+                     ~ estimate_normal(115, 10, ..1, ..2, ..3))) %>%
+  ungroup() %>%
+  hoist(post, post_mean = "mean", post_sd = "sd") %>%
+  mutate(fvoa = post_mean - 115) %>%
+  filter(week == 14) %>%
+  arrange(-post_mean)
