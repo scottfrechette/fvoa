@@ -2,31 +2,25 @@
 # Main Function -----------------------------------------------------------
 
 #' @export
-fit_team <- function(scores,
-                     prior_mean = 115,
-                     prior_sd = 10) {
+fit_team <- function(scores) {
 
-  scores <- left_join(scores,
-                      weight_games(1:max(scores$week)),
-                      by = "week")
-
-  rstanarm::stan_glm(score ~ 0 + team,
-                     data = scores,
-                     weights = weight,
-                     prior = rstanarm::student_t(10, prior_mean, prior_sd),
-                     # prior = rstanarm::normal(prior_mean, prior_sd),
-                     seed = 42,
-                     iter = 3750,
-                     warmup = 1250,
-                     chains = 4,
-                     cores = 4)
+  rstanarm::stan_glmer(data = scores,
+                       score ~ week + (week | team),
+                       prior = normal(0, 25),
+                       prior_intercept = student_t(10, 110, 35),
+                       prior_aux = exponential(rate = 1, autoscale = T),
+                       prior_covariance = decov(1, 1, 1, 1),
+                       seed = 42,
+                       iter = 3750,
+                       warmup = 1250,
+                       cores = 4,
+                       chains = 4,
+                       refresh = 0)
 
 }
 
 #' @export
-fit_team_season <- function(scores,
-                            prior_mean = 115,
-                            prior_sd = 10) {
+fit_team_season <- function(scores) {
 
   tibble(week = 1:max(scores$week)) %>%
     mutate(scores_filtered = map(week, ~filter(scores, week <= .x)),
@@ -77,12 +71,13 @@ weight_games <- function(x, alpha = 0.15) {
          weight = weekly_weights)
 }
 
-extract_team_draws <- function(team_data, model, ndraws = NULL) {
+extract_team_draws <- function(team_data, fit, ndraws = NULL) {
 
-  tidybayes::add_predicted_draws(distinct(team_data, team),
-                                 model,
-                                 ndraws,
-                                 seed = 42)
+  tibble(week = max(fit$data$week),
+         team = unique(fit$data$team)) %>%
+    tidybayes::add_predicted_draws(fit,
+                                   ndraws,
+                                   seed = 42)
 
 }
 

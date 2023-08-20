@@ -10,7 +10,7 @@ get_schedule <- function(league = c("espn", "yahoo"),
 
   if(league == "yahoo") {
 
-    if(is.null(leagueID)) leagueID <- 160225
+    if(is.null(leagueID)) leagueID <- 56749
 
     map_df(1:15, ~ get_yahoo_schedule(leagueID, .x, season))
 
@@ -40,7 +40,7 @@ get_team <- function(week,
 
   if (league == "yahoo") {
 
-    if(is.null(leagueID)) leagueID <- 160225
+    if(is.null(leagueID)) leagueID <- 56749
 
     get_yahoo_teamIDs(leagueID) %>%
       select(teamID) %>%
@@ -78,7 +78,7 @@ get_win_prob <- function(week,
 
   league <- match.arg(league)
 
-  if(is.null(leagueID)) leagueID <- 160225
+  if(is.null(leagueID)) leagueID <- 56749
 
   get_yahoo_teamIDs(leagueID) %>%
     crossing(week) %>%
@@ -105,7 +105,7 @@ get_players <- function(week,
 
   if (league == "yahoo") {
 
-    if(is.null(leagueID)) leagueID <- 160225
+    if(is.null(leagueID)) leagueID <- 56749
 
     yahoo_players <- crossing(position = c("QB", "RB", "WR", "TE",
                                            "K", "DEF", "DB", "DL"),
@@ -153,7 +153,7 @@ get_players <- function(week,
     out <- bind_rows(tmp,
                      espn_players %>%
                        anti_join(tmp, by = 'espnID') %>%
-                       left_join(select(player_table, player, mflID), by = "player"))
+                       left_join(select(player_table, player, mflID, ffprosID), by = "player"))
 
   } else {
 
@@ -224,16 +224,16 @@ get_current_roster <- function(week,
 #' @export
 get_ffa_data <- function(week = week,
                          src = c('CBS',
-                                 'ESPN',
-                                 'FantasyData',
+                                 'ESPN', #not supported
+                                 'FantasyData', #paywall
                                  'FantasyPros',
                                  'FantasySharks',
-                                 'FFToday',
+                                 'FFToday', #errored
                                  'FleaFlicker',
                                  'NumberFire',
                                  # 'Yahoo',
-                                 'FantasyFootballNerd',
-                                 'NFL'),
+                                 'FantasyFootballNerd', #not supported yet
+                                 'NFL'), #errored
                          pos = c("QB", "RB", "WR", "TE",
                                  "K", "DST", "DL", "DB"),
                          season = as.numeric(format(Sys.Date(),'%Y'))) {
@@ -347,7 +347,7 @@ get_yahoo_schedule <- function(leagueID, week,
 }
 
 get_yahoo_team <- function(week, teamID,
-                           leagueID = 160225,
+                           leagueID = 56749,
                            season = as.numeric(format(Sys.Date(),'%Y'))) {
 
   team_url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID,
@@ -397,7 +397,7 @@ get_yahoo_team <- function(week, teamID,
 }
 
 get_yahoo_winprob <- function(week, teamID,
-                              leagueID = 160225) {
+                              leagueID = 56749) {
 
   url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID,
                 "/matchup?week=", week, "&mid1=", teamID)
@@ -412,7 +412,7 @@ get_yahoo_winprob <- function(week, teamID,
 }
 
 get_yahoo_players <- function(week, position, page,
-                              leagueID = 160225) {
+                              leagueID = 56749) {
 
   url <- str_glue("https://football.fantasysports.yahoo.com/f1/{leagueID}/players?status=ALL&pos={position}&cut_type=9&stat1=S_PW_{week}&myteam=0&sort=AR&sdir=1&count={page}")
 
@@ -734,3 +734,72 @@ add_player_data <- function(df,
     mutate(mflID = if_else(mflID == "15432", "15258", mflID))
 
 }
+
+
+# Testing -----------------------------------------------------------------
+
+# library(tidyverse)
+#
+# df_stats <- read_html('https://www.fantasypros.com/nfl/stats/qb.php?year=2021&week=1&scoring=Standard&roster=consensus&range=week') %>%
+#   html_table(header = F) %>%
+#   .[[1]]
+#
+#
+# cols <- paste(as.character(df_stats[1,]),
+#               as.character(df_stats[2,]),
+#               sep = "_") %>%
+#   gsub("^_|MISC_", "", .)
+#
+# df_stats %>%
+#   slice(-1, -2) %>%
+#   rename_with(~tolower(cols)) %>%
+#   type.convert(as.is = T) %>%
+#   glimpse()
+#
+#
+# b <- read_html('https://www.fantasypros.com/nfl/stats/rb.php?year=2021&week=1&scoring=Standard&roster=consensus&range=week') %>%
+#   html_table(header = F) %>%
+#   .[[1]]
+#
+#
+# cols <- paste(as.character(b[1,]),
+#               as.character(b[2,]),
+#               sep = "_") %>%
+#   gsub("^_|MISC_", "", .)
+#
+# b %>%
+#   slice(-1, -2) %>%
+#   set_names(cols) %>%
+#   janitor::clean_names() %>%
+#   type.convert(as.is = T)
+
+
+## parameters
+# position
+# year
+# season or weekly
+# scoring - standard, ppr, half ppr
+# roster - consensus, yahoo, espn
+# range
+
+
+
+# read_csv('https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_fpecr_latest.csv',
+#          show_col_types = F) %>%
+#   filter(pos %in% c("RB"),
+#          ecr_type == "bp",
+#          ecr <= 75) %>%
+#   arrange(ecr) %>%
+#   mutate(rank = row_number()) %>%
+#   ggplot(aes(y = rank, color = pos)) +
+#   geom_point(aes(x = ecr)) +
+#   scale_y_reverse(breaks = seq(from = 0, to = 80, by = 10)) +
+#   scale_x_continuous(breaks = seq(from = 0, to = 80, by = 10),
+#                      limits = c(-3, 90)) +
+#   geom_text(aes(label = player, x = best), size = 3, hjust = 1.15) +
+#   geom_segment(aes(yend = rank, x = best, xend = worst)) +
+#   theme_minimal() +
+#   theme(legend.position = c(.1, .1),
+#         panel.grid.minor.x = element_blank()) +
+#   guides(color = guide_legend(nrow = 1)) +
+#   labs(color = NULL)

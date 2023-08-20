@@ -74,7 +74,8 @@ evaluate_model <- function(fit_team_season_df, schedule = NULL) {
     filter(week < max(fit_team_season_df$week)) %>%
     mutate(week = week + 1L,
            sims = map(model,
-                      ~ fit_team_season_df$scores_filtered[[1]]["team"] %>%
+                      ~ fit_team_season_df$scores_filtered[[1]][,c('team', 'week')] %>%
+                        mutate(week = week + 1) %>%
                         tidybayes::add_predicted_draws(.x, seed = 42, value = "score") %>%
                         ungroup() %>%
                         nest(data = -team))) %>%

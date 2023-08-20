@@ -1,56 +1,47 @@
+
+# Main Functions ----------------------------------------------------------
+
 #' @export
-simulate_season_scores <- function(schedule, fit,
-                                   change_prob = 0.1,
-                                   score_adj = 15) {
+simulate_season_scores <- function(schedule,
+                                   fit,
+                                   sims = 1000,
+                                   .last_n = 3,
+                                   .change_prob = 0.25,
+                                   .score_adj = 25) {
 
-  set.seed(42)
-
-  scores <- fit$data %>%
-    as_tibble() %>%
-    select(-weight)
-
-  sims <- schedule %>%
-    distinct(week, team) %>%
-    tidybayes::add_predicted_draws(fit, seed = 42) %>%
+  next_week_sim <- tibble(week = max(fit$data$week + 1),
+                          team = unique(fit$data$team)) %>%
+    tidybayes::add_predicted_draws(fit, ndraws = sims) %>%
     ungroup() %>%
-    select(sim = .draw, week, team, score = .prediction) %>%
-    mutate(change = rbinom(n = n(), size = 1, prob = change_prob),
-           dir = sample(x = c(-1, 1), size = n(),
-                        replace = T, prob =  c(0.5, 0.5)),
-           change_dir = change * dir) %>%
-    group_by(sim, team) %>%
-    mutate(changes = cumsum(change_dir),
-           adj_score = score + changes * score_adj) %>%
-    ungroup()
+    select(sim = .draw, week, team, score = .prediction)
 
-  sim <- bind_rows(
-    crossing(
-      distinct(sims, sim),
-      schedule %>%
-        filter(week <= max(scores$week)) %>%
-        left_join(rename(scores, score1 = score),
-                  by = c("week", "team")) %>%
-        left_join(rename(scores, score2 = score),
-                  by = c("week", "opponent" = "team")) %>%
-        mutate(win = score1 > score2)),
-    schedule %>%
-      filter(week > max(scores$week)) %>%
-      left_join(rename(sims, score1 = adj_score),
-                by = c("week", "team")) %>%
-      left_join(rename(sims, score2 = adj_score),
-                by = c("week", "opponent" = "team", "sim")) %>%
-      mutate(win = score1 > score2) %>%
-      select(week, team, opponent,
-             score1, score2, win, sim)
-  )
+  sim_scores <- crossing(sim = 1:sims, fit$data) %>%
+    bind_rows(next_week_sim) %>%
+    nest(.by = c(team, sim)) %>%
+    mutate(pred = map2(data, sim,
+                       ~sim_season(.x$score, .y,
+                                   last_n = .last_n,
+                                   change_prob = .change_prob,
+                                   score_adj = .score_adj))) %>%
+    select(-data) %>%
+    unnest(pred)
+
+  sim_season <- crossing(sim = 1:sims, schedule) %>%
+    left_join(rename(sim_scores, score1 = score),
+              by = c('team', 'sim', 'week')) %>%
+    left_join(rename(sim_scores, opponent = team, score2 = score),
+              by = c('opponent', 'sim', 'week')) %>%
+    mutate(win = score1 > score2) %>%
+    select(week, team, opponent,
+           score1, score2, win, sim)
 
   if ("gameID" %in% names(schedule)) {
 
-    sim <- mutate(sim, gameID = schedule$gameID, .after = 1)
+    sim_season <- mutate(sim_season, gameID = schedule$gameID, .after = 1)
 
   }
 
-  return(sim)
+  return(sim_season)
 
 }
 
@@ -125,4 +116,79 @@ simulate_final_standings_season <- function(fit_team_season_df, schedule) {
     select(week, simulated_final_standings) %>%
     unnest(simulated_final_standings)
 
+}
+
+
+# Helper Functions --------------------------------------------------------
+
+sim_team_season <- function(scores,
+                            seed = 42,
+                            last_n = 3,
+                            change_prob = 0.25,
+                            score_adj = 25) {
+
+  set.seed(seed)
+
+  score_tmp <- rep(NA, 15)
+  score_tmp[1:length(score)] <- score
+
+  for (i in (length(scores) + 1):15) {
+
+    # dist <- estimate_normal(110, 25,
+    #                         mean(tail(score_tmp[!is.na(score_tmp)], last_n)),
+    #                         sd(tail(score_tmp[!is.na(score_tmp)], last_n)),
+    #                         length(tail(score_tmp, last_n)))
+
+    dist <- estimate_normal(110, 25,
+                            tail(ema(score_tmp[!is.na(score_tmp)], last_n), 1),
+                            tail(emsd(score_tmp[!is.na(score_tmp)], last_n), 1),
+                            length(tail(score_tmp, last_n)))
+
+    pred <- rnorm(1, dist$mean, dist$sd) +
+      rbinom(n = 1, size = 1, prob = change_prob) *
+      rnorm(1, 0, score_adj)
+
+    score_tmp[i] <- pred
+
+  }
+
+  tibble(week = 1:15, score = score_tmp)
+
+}
+
+ema <- function (x, window = NULL, ratio = NULL) {
+
+  if (is.null(window) & is.null(ratio)) stop("Please select either window or ratio")
+
+  if (!is.null(window)) ratio <- 2 / (window + 1)
+
+  c(stats::filter(x = x * ratio, filter = 1 - ratio, method = "recursive", init = x[1]))
+
+}
+
+emsd <- function(x, window = NULL, ratio = NULL, initial = 15) {
+
+  if (is.null(window) & is.null(ratio)) stop("Please select either window or ratio")
+
+  if (!is.null(window)) ratio <- 2 / (window + 1)
+
+  n <- length(x)
+
+  out <- sapply(
+    1:n,
+    function(i, x, ratio) {
+      y <- x[1:i]
+      m <- length(y)
+      weights <- (1 - ratio)^((m - 1):0)
+      ewma <- sum(weights * y) / sum(weights)
+      bias <- sum(weights)^2 / (sum(weights)^2 - sum(weights^2))
+      ewmsd <- sqrt(bias * sum(weights * (y - ewma)^2) / sum(weights))
+    },
+    x = x,
+    ratio = ratio
+  )
+
+  out[1] <- initial
+
+  out
 }

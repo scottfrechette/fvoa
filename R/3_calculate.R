@@ -113,7 +113,8 @@ calculate_fvoa <- function(fit) {
 
   scores <- as_tibble(fit$data)
 
-  tidybayes::add_epred_draws(distinct(fit$data, team),
+  tidybayes::add_epred_draws(tibble(week = max(scores$week),
+                                    team = unique(scores$team)),
                              fit,
                              seed = 42) %>%
     group_by(team) %>%

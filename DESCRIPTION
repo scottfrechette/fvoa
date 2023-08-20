@@ -1,11 +1,11 @@
 Type: Package
 Package: fvoa
 Title: Frech-Adjusted Value Over Average for Fantasy Football
-Version: 2.0.0
+Version: 2.1.0
 Author: Scott Frechette <scottfrechette@gmail.com>
 Maintainer: Scott Frechette <scottfrechette@gmail.com>
-Description: Package that scrapes fantasy information from ESPN and Yahoo Fantasy Football and 
-    can uses data to compare teams, simulate seasons, and create visuals. Essentially everything 
+Description: Package that scrapes fantasy information from ESPN and Yahoo Fantasy Football 
+    to compare teams, simulate seasons, and create visuals. Essentially everything 
     you need to build analytics behind your trash-talking.
 License: CC0
 Depends: 

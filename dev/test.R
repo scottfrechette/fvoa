@@ -8,7 +8,7 @@ library(skimr)
 
 theme_set(fvoa::theme_fvoa())
 
-sx_con <- espn_connect(2021, 299999)
+sx_con <- espn_connect(2020, 299999)
 
 owners <- ff_franchises(sx_con) %>%
   select(teamID = 1, team = 2)
@@ -1405,9 +1405,477 @@ scores_full %>%
   mutate(avg = ema(score, 4),
          sd = emsd(score, 4),
          post = pmap(list(avg, sd, week),
-                     ~ estimate_normal(115, 10, ..1, ..2, ..3))) %>%
+                     ~ estimate_normal(110, 25, ..1, ..2, ..3))) %>%
   ungroup() %>%
   hoist(post, post_mean = "mean", post_sd = "sd") %>%
-  mutate(fvoa = post_mean - 115) %>%
+  mutate(fvoa = post_mean - 110) %>%
   filter(week == 14) %>%
   arrange(-post_mean)
+
+# Season Simulations ------------------------------------------------------
+
+library(tidyverse)
+library(funcyfrech)
+library(skimr)
+library(rstanarm)
+library(tidybayes)
+library(broom.mixed)
+library(bayesAB)
+rename <- dplyr::rename
+
+theme_set(fvoa::theme_fvoa())
+
+sim_season <- function(score,
+                       seed = 42,
+                       last_n = 3,
+                       change_prob = 0.25,
+                       score_adj = 25) {
+
+  set.seed(seed)
+
+  score_tmp <- rep(NA, 15)
+  score_tmp[1:length(score)] <- score
+
+  for (i in (length(score) + 1):15) {
+
+    score_last_n <- tail(score_tmp[!is.na(score_tmp)], last_n)
+
+    dist <- estimate_normal(110, 25, mean(score_last_n), sd(score_last_n), length(score_last_n))
+    pred <- rnorm(1, dist$mean, dist$sd) +
+      rbinom(n = 1, size = 1, prob = change_prob) *
+      rnorm(1, 0, score_adj)
+    score_tmp[i] <- pred
+
+  }
+
+  tibble(week = 1:15, score = score_tmp)
+
+}
+
+schedule <- tibble::tribble(
+  ~season, ~week,     ~team, ~opponent,
+  2022L,    1L, "Barrett",   "David",
+  2022L,    1L,   "Bobby",   "Scott",
+  2022L,    1L,  "German",   "PFinn",
+  2022L,    1L,  "Justin",    "Diaz",
+  2022L,    1L,    "Josh",    "Eric",
+  2022L,    1L,   "David", "Barrett",
+  2022L,    1L,   "Scott",   "Bobby",
+  2022L,    1L,   "PFinn",  "German",
+  2022L,    1L,    "Diaz",  "Justin",
+  2022L,    1L,    "Eric",    "Josh",
+  2022L,    2L, "Barrett",  "Justin",
+  2022L,    2L,   "Bobby",    "Diaz",
+  2022L,    2L,   "Scott",    "Josh",
+  2022L,    2L,  "German",    "Eric",
+  2022L,    2L,   "PFinn",   "David",
+  2022L,    2L,  "Justin", "Barrett",
+  2022L,    2L,    "Diaz",   "Bobby",
+  2022L,    2L,    "Josh",   "Scott",
+  2022L,    2L,    "Eric",  "German",
+  2022L,    2L,   "David",   "PFinn",
+  2022L,    3L, "Barrett",   "Bobby",
+  2022L,    3L,   "Scott",  "German",
+  2022L,    3L,  "Justin",   "David",
+  2022L,    3L,   "PFinn",    "Eric",
+  2022L,    3L,    "Josh",    "Diaz",
+  2022L,    3L,   "Bobby", "Barrett",
+  2022L,    3L,  "German",   "Scott",
+  2022L,    3L,   "David",  "Justin",
+  2022L,    3L,    "Eric",   "PFinn",
+  2022L,    3L,    "Diaz",    "Josh",
+  2022L,    4L, "Barrett",    "Josh",
+  2022L,    4L,   "Bobby",  "Justin",
+  2022L,    4L,   "Scott",   "PFinn",
+  2022L,    4L,  "German",    "Diaz",
+  2022L,    4L,   "David",    "Eric",
+  2022L,    4L,    "Josh", "Barrett",
+  2022L,    4L,  "Justin",   "Bobby",
+  2022L,    4L,   "PFinn",   "Scott",
+  2022L,    4L,    "Diaz",  "German",
+  2022L,    4L,    "Eric",   "David",
+  2022L,    5L, "Barrett",  "German",
+  2022L,    5L,   "Bobby",   "David",
+  2022L,    5L,   "Scott",    "Eric",
+  2022L,    5L,  "Justin",    "Josh",
+  2022L,    5L,   "PFinn",    "Diaz",
+  2022L,    5L,  "German", "Barrett",
+  2022L,    5L,   "David",   "Bobby",
+  2022L,    5L,    "Eric",   "Scott",
+  2022L,    5L,    "Josh",  "Justin",
+  2022L,    5L,    "Diaz",   "PFinn",
+  2022L,    6L, "Barrett",   "PFinn",
+  2022L,    6L,   "Bobby",    "Josh",
+  2022L,    6L,   "Scott",   "David",
+  2022L,    6L,  "German",  "Justin",
+  2022L,    6L,    "Diaz",    "Eric",
+  2022L,    6L,   "PFinn", "Barrett",
+  2022L,    6L,    "Josh",   "Bobby",
+  2022L,    6L,   "David",   "Scott",
+  2022L,    6L,  "Justin",  "German",
+  2022L,    6L,    "Eric",    "Diaz",
+  2022L,    7L, "Barrett",    "Eric",
+  2022L,    7L,   "Bobby",  "German",
+  2022L,    7L,   "Scott",    "Diaz",
+  2022L,    7L,  "Justin",   "PFinn",
+  2022L,    7L,    "Josh",   "David",
+  2022L,    7L,    "Eric", "Barrett",
+  2022L,    7L,  "German",   "Bobby",
+  2022L,    7L,    "Diaz",   "Scott",
+  2022L,    7L,   "PFinn",  "Justin",
+  2022L,    7L,   "David",    "Josh",
+  2022L,    8L, "Barrett",   "Scott",
+  2022L,    8L,   "Bobby",   "PFinn",
+  2022L,    8L,  "German",    "Josh",
+  2022L,    8L,  "Justin",    "Eric",
+  2022L,    8L,   "David",    "Diaz",
+  2022L,    8L,   "Scott", "Barrett",
+  2022L,    8L,   "PFinn",   "Bobby",
+  2022L,    8L,    "Josh",  "German",
+  2022L,    8L,    "Eric",  "Justin",
+  2022L,    8L,    "Diaz",   "David",
+  2022L,    9L, "Barrett",    "Diaz",
+  2022L,    9L,   "Bobby",    "Eric",
+  2022L,    9L,   "Scott",  "Justin",
+  2022L,    9L,  "German",   "David",
+  2022L,    9L,   "PFinn",    "Josh",
+  2022L,    9L,    "Diaz", "Barrett",
+  2022L,    9L,    "Eric",   "Bobby",
+  2022L,    9L,  "Justin",   "Scott",
+  2022L,    9L,   "David",  "German",
+  2022L,    9L,    "Josh",   "PFinn",
+  2022L,   10L, "Barrett",   "David",
+  2022L,   10L,   "Bobby",   "Scott",
+  2022L,   10L,  "German",   "PFinn",
+  2022L,   10L,  "Justin",    "Diaz",
+  2022L,   10L,    "Josh",    "Eric",
+  2022L,   10L,   "David", "Barrett",
+  2022L,   10L,   "Scott",   "Bobby",
+  2022L,   10L,   "PFinn",  "German",
+  2022L,   10L,    "Diaz",  "Justin",
+  2022L,   10L,    "Eric",    "Josh",
+  2022L,   11L, "Barrett",  "Justin",
+  2022L,   11L,   "Bobby",    "Diaz",
+  2022L,   11L,   "Scott",    "Josh",
+  2022L,   11L,  "German",    "Eric",
+  2022L,   11L,   "PFinn",   "David",
+  2022L,   11L,  "Justin", "Barrett",
+  2022L,   11L,    "Diaz",   "Bobby",
+  2022L,   11L,    "Josh",   "Scott",
+  2022L,   11L,    "Eric",  "German",
+  2022L,   11L,   "David",   "PFinn",
+  2022L,   12L, "Barrett",   "Bobby",
+  2022L,   12L,   "Scott",  "German",
+  2022L,   12L,  "Justin",   "David",
+  2022L,   12L,   "PFinn",    "Eric",
+  2022L,   12L,    "Josh",    "Diaz",
+  2022L,   12L,   "Bobby", "Barrett",
+  2022L,   12L,  "German",   "Scott",
+  2022L,   12L,   "David",  "Justin",
+  2022L,   12L,    "Eric",   "PFinn",
+  2022L,   12L,    "Diaz",    "Josh",
+  2022L,   13L, "Barrett",    "Josh",
+  2022L,   13L,   "Bobby",  "Justin",
+  2022L,   13L,   "Scott",   "PFinn",
+  2022L,   13L,  "German",    "Diaz",
+  2022L,   13L,   "David",    "Eric",
+  2022L,   13L,    "Josh", "Barrett",
+  2022L,   13L,  "Justin",   "Bobby",
+  2022L,   13L,   "PFinn",   "Scott",
+  2022L,   13L,    "Diaz",  "German",
+  2022L,   13L,    "Eric",   "David",
+  2022L,   14L, "Barrett",  "German",
+  2022L,   14L,   "Bobby",   "David",
+  2022L,   14L,   "Scott",    "Eric",
+  2022L,   14L,  "Justin",    "Josh",
+  2022L,   14L,   "PFinn",    "Diaz",
+  2022L,   14L,  "German", "Barrett",
+  2022L,   14L,   "David",   "Bobby",
+  2022L,   14L,    "Eric",   "Scott",
+  2022L,   14L,    "Josh",  "Justin",
+  2022L,   14L,    "Diaz",   "PFinn",
+  2022L,   15L, "Barrett",   "PFinn",
+  2022L,   15L,   "Bobby",    "Josh",
+  2022L,   15L,   "Scott",   "David",
+  2022L,   15L,  "German",  "Justin",
+  2022L,   15L,    "Diaz",    "Eric",
+  2022L,   15L,   "PFinn", "Barrett",
+  2022L,   15L,    "Josh",   "Bobby",
+  2022L,   15L,   "David",   "Scott",
+  2022L,   15L,  "Justin",  "German",
+  2022L,   15L,    "Eric",    "Diaz"
+)
+
+clt_full <- tibble::tribble(
+  ~week,     ~team, ~score,
+  1L, "Barrett",  100.7,
+  1L,   "Bobby", 118.13,
+  1L,   "Scott",  124.3,
+  1L,  "German", 105.57,
+  1L,  "Justin", 117.73,
+  1L,   "PFinn",  105.6,
+  1L,    "Josh",    144,
+  1L,   "David", 129.07,
+  1L,    "Diaz",    130,
+  1L,    "Eric",  94.37,
+  2L, "Barrett",  142.5,
+  2L,   "Bobby", 126.23,
+  2L,   "Scott", 140.07,
+  2L,  "German",   66.9,
+  2L,  "Justin",   93.1,
+  2L,   "PFinn",  133.2,
+  2L,    "Josh",  97.33,
+  2L,   "David", 133.93,
+  2L,    "Diaz", 115.53,
+  2L,    "Eric", 114.23,
+  3L, "Barrett", 103.33,
+  3L,   "Bobby",  89.37,
+  3L,   "Scott", 128.33,
+  3L,  "German", 109.87,
+  3L,  "Justin",     98,
+  3L,   "PFinn", 107.97,
+  3L,    "Josh", 103.03,
+  3L,   "David",  86.63,
+  3L,    "Diaz",  112.3,
+  3L,    "Eric",  67.63,
+  4L, "Barrett", 106.87,
+  4L,   "Bobby",  128.1,
+  4L,   "Scott",  125.5,
+  4L,  "German", 107.77,
+  4L,  "Justin",  79.07,
+  4L,   "PFinn",  108.8,
+  4L,    "Josh",  101.1,
+  4L,   "David", 138.03,
+  4L,    "Diaz", 129.23,
+  4L,    "Eric",  133.2,
+  5L, "Barrett", 111.87,
+  5L,   "Bobby", 108.43,
+  5L,   "Scott", 171.73,
+  5L,  "German",  87.93,
+  5L,  "Justin",  80.43,
+  5L,   "PFinn",    119,
+  5L,    "Josh", 112.43,
+  5L,   "David", 117.97,
+  5L,    "Diaz",  138.3,
+  5L,    "Eric",  78.33,
+  6L, "Barrett",  73.17,
+  6L,   "Bobby",  98.83,
+  6L,   "Scott", 139.47,
+  6L,  "German",    103,
+  6L,  "Justin",    126,
+  6L,   "PFinn",   88.6,
+  6L,    "Josh",  97.67,
+  6L,   "David",   95.3,
+  6L,    "Diaz",  68.03,
+  6L,    "Eric", 102.27,
+  7L, "Barrett",   89.1,
+  7L,   "Bobby",  103.5,
+  7L,   "Scott",    113,
+  7L,  "German", 108.13,
+  7L,  "Justin", 130.73,
+  7L,   "PFinn",   87.4,
+  7L,    "Josh",  126.8,
+  7L,   "David",  81.77,
+  7L,    "Diaz",  96.07,
+  7L,    "Eric",   79.1,
+  8L, "Barrett",  128.8,
+  8L,   "Bobby", 179.17,
+  8L,   "Scott",  78.17,
+  8L,  "German", 103.93,
+  8L,  "Justin",  99.87,
+  8L,   "PFinn", 119.63,
+  8L,    "Josh", 168.77,
+  8L,   "David", 128.43,
+  8L,    "Diaz", 149.53,
+  8L,    "Eric", 137.73,
+  9L, "Barrett",   78.9,
+  9L,   "Bobby", 127.46,
+  9L,   "Scott", 102.93,
+  9L,  "German", 125.77,
+  9L,  "Justin", 125.93,
+  9L,   "PFinn",  96.63,
+  9L,    "Josh", 127.27,
+  9L,   "David", 123.87,
+  9L,    "Diaz",  98.47,
+  9L,    "Eric",  114.8,
+  10L, "Barrett", 103.53,
+  10L,   "Bobby", 112.17,
+  10L,   "Scott",  110.3,
+  10L,  "German",  101.1,
+  10L,  "Justin", 121.77,
+  10L,   "PFinn",   58.5,
+  10L,    "Josh",  96.63,
+  10L,   "David", 109.47,
+  10L,    "Diaz",   90.3,
+  10L,    "Eric", 132.47,
+  11L, "Barrett", 103.73,
+  11L,   "Bobby", 110.44,
+  11L,   "Scott", 119.37,
+  11L,  "German", 126.33,
+  11L,  "Justin", 136.23,
+  11L,   "PFinn",  97.97,
+  11L,    "Josh",  114.9,
+  11L,   "David", 117.73,
+  11L,    "Diaz",  81.83,
+  11L,    "Eric",  116.2,
+  12L, "Barrett",  125.4,
+  12L,   "Bobby", 120.27,
+  12L,   "Scott", 151.73,
+  12L,  "German",  111.2,
+  12L,  "Justin",  124.5,
+  12L,   "PFinn",  95.47,
+  12L,    "Josh",  95.47,
+  12L,   "David",    118,
+  12L,    "Diaz", 101.87,
+  12L,    "Eric",  117.1,
+  13L, "Barrett", 114.87,
+  13L,   "Bobby", 119.63,
+  13L,   "Scott", 116.13,
+  13L,  "German", 118.33,
+  13L,  "Justin", 112.37,
+  13L,   "PFinn",  91.57,
+  13L,    "Josh",  90.93,
+  13L,   "David",  86.37,
+  13L,    "Diaz", 106.07,
+  13L,    "Eric", 122.17,
+  14L, "Barrett",  91.23,
+  14L,   "Bobby",  142.6,
+  14L,   "Scott",  119.4,
+  14L,  "German",  73.97,
+  14L,  "Justin", 144.77,
+  14L,   "PFinn",  92.67,
+  14L,    "Josh",  95.43,
+  14L,   "David",  127.3,
+  14L,    "Diaz",  99.63,
+  14L,    "Eric",  97.87,
+  15L, "Barrett",  147.5,
+  15L,   "Bobby",  96.27,
+  15L,   "Scott", 135.33,
+  15L,  "German", 123.37,
+  15L,  "Justin",    108,
+  15L,   "PFinn", 145.83,
+  15L,    "Josh",  138.3,
+  15L,   "David",  93.97,
+  15L,    "Diaz",  84.23,
+  15L,    "Eric", 120.43
+)
+
+wk <- 2
+clt <- filter(clt_full, week <= wk)
+
+c <- mutate(clt, score_c = score - 110)
+
+m <- stan_glmer(data = c,
+                score ~ week + (week | team),
+                # score ~ 0 + week + (week | team),
+                # score ~ week + I(week^2) + (week + I(week^2) | team),
+                # score ~ poly(week, 2) + (poly(week, 2) | team),
+                # score ~ poly(week, 3) + (poly(week, 3) | team),
+                # score ~ 1 + (week | team),
+                # score ~ 0 + week + I(week^2) + (week + I(week^2) | team),
+                prior = normal(0, 25),
+                prior_intercept = student_t(10, 110, 35),
+                prior_aux = exponential(rate = 1, autoscale = T),
+                prior_covariance = decov(1, 1, 1, 1),
+                seed = 42,
+                iter = 3750,
+                warmup = 1250,
+                cores = 4,
+                chains = 4)
+
+tidy(m, effects = 'fixed', robust = T, conf.int = T)
+tidy(m, effects = 'ran_pars', robust = T, conf.int = T)
+arrange(tidy(m, effects = 'ran_vals', robust = T, conf.int = T), term, -estimate)
+tidyMCMC(m, robust = T, conf.int = T) %>% View()
+
+tmp <- add_epred_draws(tibble(week = wk, team = unique(c$team)), m, seed = 42) %>%
+  mutate(fvoa = .epred - 110) %>%
+  median_hdi(fvoa, .width = c(.89, .5)) %>%
+  arrange(-fvoa) %>%
+  mutate(label = str_glue("{team} ({round(fvoa, 1)})")) %>%
+  arrange(-fvoa)
+
+tmp %>%
+  ggplot(aes(y = reorder(team, fvoa),
+             yend = reorder(team, fvoa))) +
+  geom_segment(aes(x = .lower, xend = .upper),
+               data = filter(tmp, .width == 0.89),
+               size = 0.5, color = "#6497b1") +
+  geom_segment(aes(x = .lower, xend = .upper),
+               data = filter(tmp, .width == 0.5),
+               size = 2, color = "#03396c") +
+  geom_point(aes(x = fvoa),
+             size = 4, fill = "#d1e1ec", color = "#011f4b", shape = 21) +
+  geom_vline(xintercept = 0, linetype = 2, color = "grey50") +
+  labs(x = "FVOA", y = NULL) +
+  theme_fvoa() +
+  theme(axis.text.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold"),
+        panel.grid.major.y = element_blank()) +
+  geom_text(aes(label = label, x = fvoa),
+            vjust = -1, alpha = 0.5, size = 3.5) +
+  theme(axis.text.y = element_blank(),
+        panel.border = element_blank())
+
+p <- tibble(week = wk + 1, team = unique(c$team)) %>%
+  add_predicted_draws(m, ndraws = 1000) %>%
+  ungroup() %>%
+  select(sim = .draw, week, team, score = .prediction)
+
+sims <- crossing(sim = 1:1000, c) %>%
+  bind_rows(p) %>%
+  nest(.by = c(team, sim)) %>%
+  mutate(pred = map2(data, sim, ~sim_season(.x$score, .y, last_n = 3))) %>%
+  select(-data) %>%
+  unnest(pred)
+
+crossing(sim = 1:1000, schedule) %>%
+  left_join(rename(sims, score1 = score), by = c('team', 'sim', 'week')) %>%
+  left_join(rename(sims, opponent = team, score2 = score), by = c('opponent', 'sim', 'week')) %>%
+  simulate_season_standings() %>%
+  simulate_final_standings()
+
+sims %>%
+  nest(.by = sim) %>%
+  sample_n(100) %>%
+  unnest(data) %>%
+  ggplot(aes(week, score)) +
+  geom_line(alpha = 0.05, aes(group = sim)) +
+  geom_smooth(se = F) +
+  # geom_line(data = filter(clt_full, week >= wk + 1)) +
+  geom_hline(yintercept = 110, color = 'red', linetype = 2) +
+  # geom_smooth(data = c, se = F, method = 'lm', formula = 'y ~ x') +
+  scale_x_continuous(breaks = 1:15) +
+  facet_wrap(~ team, scales = "free_x")
+
+c %>%
+  ggplot(aes(week, score)) +
+  geom_line() +
+  geom_smooth(se = F, method = 'lm', formula = 'y ~ x') +
+  stat_lineribbon(data = filter(sims, week >= wk + 1)) +
+  geom_hline(yintercept = 110, color = 'red', linetype = 2) +
+  scale_x_continuous(breaks = 1:15) +
+  facet_wrap(~ team, scales = "free_x")
+
+q <- crossing(week = (wk + 1):15, team = unique(c$team)) %>%
+  add_predicted_draws(m, ndraws = 10000) %>%
+  ungroup() %>%
+  # mutate(.prediction = .prediction + 110) %>%
+  select(sim = .draw, week, team, score = .prediction)
+
+qq <- bind_rows(crossing(sim = 1:10000, c), q)
+
+crossing(sim = 1:10000, schedule) %>%
+  left_join(rename(qq, score1 = score), by = c('team', 'sim', 'week')) %>%
+  left_join(rename(qq, opponent = team, score2 = score), by = c('opponent', 'sim', 'week')) %>%
+  simulate_season_standings() %>%
+  simulate_final_standings()
+
+c %>%
+  ggplot(aes(week, score)) +
+  geom_line() +
+  geom_smooth(se = F, method = 'lm', formula = 'y ~ x') +
+  stat_lineribbon(data = q) +
+  geom_hline(yintercept = 110, color = 'red', linetype = 2) +
+  scale_x_continuous(breaks = 1:15) +
+  facet_wrap(~ team, scales = "free_x")

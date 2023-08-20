@@ -11,7 +11,7 @@ compare_teams <- function(team1, team2,
 
   if (!is.null(fit)) {
 
-    sim <- tibble(team = c(team1, team2)) %>%
+    sim <- tibble(week = max(fit$data$week), team = c(team1, team2)) %>%
       tidybayes::add_predicted_draws(fit, seed = 42) %>%
       ungroup() %>%
       select(team, sim = .draw, score = .prediction) %>%
@@ -36,15 +36,6 @@ compare_teams <- function(team1, team2,
     "ERROR"
 
   }
-
-  # sim <- tibble(team = c(team1, team2)) %>%
-  #   tidybayes::add_predicted_draws(fit, seed = 42) %>%
-  #   ungroup() %>%
-  #   select(team, sim = .draw, score = .prediction) %>%
-  #   spread(team, score) %>%
-  #   rename(team1 = all_of(team1), team2 = all_of(team2)) %>%
-  #   mutate(diff = team1 - team2) %>%
-  #   pull(diff)
 
   if(.output == "prob") {
 
@@ -96,8 +87,8 @@ compare_teams <- function(team1, team2,
 #' @export
 compare_league <- function(fit) {
 
-  team_sims <- as_tibble(fit$data) %>%
-    distinct(team) %>%
+  team_sims <- tibble(week = max(fit$data$week),
+           team = unique(fit$data$team)) %>%
     tidybayes::add_predicted_draws(fit, seed = 42) %>%
     ungroup() %>%
     select(team, score = .prediction) %>%

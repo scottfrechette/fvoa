@@ -181,14 +181,16 @@ plot_team_fvoa <- function(fit,
                            .label = T,
                            .average = T) {
 
-  tmp <- tidybayes::add_epred_draws(distinct(fit$data, team), fit, seed = 42) %>%
-    mutate(fvoa = .epred - 115) %>%
+  tmp <- tibble(week = max(fit$data$week),
+                team = unique(fit$data$team)) %>%
+    tidybayes::add_epred_draws(fit, seed = 42) %>%
+    mutate(fvoa = .epred - 110) %>%
     tidybayes::median_hdi(fvoa, .width = c(.89, .5)) %>%
     mutate(label = str_glue("{team} ({round(fvoa, 1)})")) %>%
     arrange(-fvoa) %>%
     left_join(as_tibble(fit$data) %>%
                 group_by(team) %>%
-                summarize(avg = mean(score) - 115),
+                summarize(avg = mean(score) - 110),
               by = "team")
 
   p <- tmp %>%
@@ -316,13 +318,13 @@ plot_h2h_matchup <- function(team1, team2,
              x = wp_points$tm1_min,
              y = wp_points$tm2_max - 5,
              hjust = 0,
-             label = str_glue("Squeaker (<5 points): {wp_labels$tm1_squeaker}\nBlowout (>20 points): {wp_labels$tm1_blowout}"),
+             label = str_glue("Squeaker (<5 points): {wp_labels$tm2_squeaker}\nBlowout (>20 points): {wp_labels$tm2_blowout}"),
              color = "grey65") +
     annotate("text",
              x = wp_points$tm1_max - 80,
              y = wp_points$tm2_min + 5,
              hjust = 0,
-             label = str_glue("Squeaker (<5 points): {wp_labels$tm2_squeaker}\nBlowout (>20 points): {wp_labels$tm2_blowout}"),
+             label = str_glue("Squeaker (<5 points): {wp_labels$tm1_squeaker}\nBlowout (>20 points): {wp_labels$tm1_blowout}"),
              color = "grey65") +
     guides(color = "none") +
     labs(x = str_glue(team1, " Simulated Scores \n(Win Probability: {wp_labels[['tm1_wins']]})"),
@@ -1145,13 +1147,15 @@ plot_shrinkage <- function(fit) {
     group_by(team) %>%
     summarize(avg = mean(score), .groups = "drop")
 
-  tidybayes::add_epred_draws(distinct(scores, team), fit) %>%
+  tibble(week = max(fit$data$week),
+         team = unique(fit$data$team)) %>%
+  tidybayes::add_epred_draws(fit) %>%
     tidybayes::median_hdi() %>%
     left_join(team_avg, by = "team") %>%
     ggplot(aes(y = reorder(team, avg))) +
     geom_point(aes(x = avg), color = "#0072B2") +
     geom_point(aes(x = .epred), color = "#009E73") +
-    geom_vline(xintercept = 115, linetype = 2) +
+    geom_vline(xintercept = 110, linetype = 2) +
     labs(y = NULL,
          x = "Score",
          title = "Visualize shrinkage from <span style='color:#0072B2;'>actual</span> and <span style='color:#009E73;'>fitted</span> scores") +
