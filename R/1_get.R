@@ -10,7 +10,7 @@ get_schedule <- function(league = c("espn", "yahoo"),
 
   if(league == "yahoo") {
 
-    if(is.null(leagueID)) leagueID <- 56749
+    if(is.null(leagueID)) leagueID <- 102347
 
     map_df(1:15, ~ get_yahoo_schedule(leagueID, .x, season))
 
@@ -40,7 +40,7 @@ get_team <- function(week,
 
   if (league == "yahoo") {
 
-    if(is.null(leagueID)) leagueID <- 56749
+    if(is.null(leagueID)) leagueID <- 102347
 
     get_yahoo_teamIDs(leagueID) %>%
       select(teamID) %>%
@@ -78,7 +78,7 @@ get_win_prob <- function(week,
 
   league <- match.arg(league)
 
-  if(is.null(leagueID)) leagueID <- 56749
+  if(is.null(leagueID)) leagueID <- 102347
 
   get_yahoo_teamIDs(leagueID) %>%
     crossing(week) %>%
@@ -105,7 +105,7 @@ get_players <- function(week,
 
   if (league == "yahoo") {
 
-    if(is.null(leagueID)) leagueID <- 56749
+    if(is.null(leagueID)) leagueID <- 102347
 
     yahoo_players <- crossing(position = c("QB", "RB", "WR", "TE",
                                            "K", "DEF", "DB", "DL"),
@@ -224,8 +224,8 @@ get_current_roster <- function(week,
 #' @export
 get_ffa_data <- function(week = week,
                          src = c('CBS',
-                                 'ESPN', #not supported
-                                 'FantasyData', #paywall
+                                 'ESPN',
+                                 #'FantasyData', #paywall
                                  'FantasyPros',
                                  'FantasySharks',
                                  'FFToday', #errored
@@ -233,7 +233,9 @@ get_ffa_data <- function(week = week,
                                  'NumberFire',
                                  # 'Yahoo',
                                  'FantasyFootballNerd', #not supported yet
-                                 'NFL'), #errored
+                                 'RTSports',
+                                 'Walterfootball',
+                                 'NFL'), #
                          pos = c("QB", "RB", "WR", "TE",
                                  "K", "DST", "DL", "DB"),
                          season = as.numeric(format(Sys.Date(),'%Y'))) {
@@ -325,29 +327,38 @@ get_yahoo_schedule <- function(leagueID, week,
     select(teamID, opponentID)
 
   tmp <- rvest::read_html(url) %>%
-    rvest::html_nodes("#matchupweek .List-rich") %>%
+    rvest::html_nodes("#matchupweek") %>%
+    # rvest::html_nodes("#matchupweek .List-rich") %>%
     rvest::html_text() %>%
     str_remove_all(., "\\n|   ") %>%
     as_tibble() %>%
     separate_rows(value, sep = "View Matchup") %>%
-    filter(value != "") %>%
-    separate(value, c("team1", "team2"), sep = "vs") %>%
+    # filter(value != "") %>%
+    slice_tail(n = 5) %>%
+    mutate(value = str_squish(value)) %>%
+    separate(value, c("team1", "team2"), sep = " vs ") %>%
     mutate(gameID = row_number(),
-           week = week) %>%
-    extract(team1, c("team_projected", "team_score", "team", "team_record"),
-            "(\\d+\\.\\d+)  ([0-9.]+) +(.*)  ([0-9-)]+)") %>%
-    extract(team2, c("opponent_projected", "opponent_score", "opponent", "opponent_record"),
-            "(\\d+\\.\\d+)  ([0-9.]+) +(.*)  ([0-9-)]+)") %>%
+           week = week,
+           team1 = str_remove(team1, "\\| "),
+           team2 = str_remove(team2, "\\| ")) %>%
+    # extract(team1, c("team_projected", "team_score", "team", "team_record"),
+    #         "(\\d+\\.\\d+)  ([0-9.]+) +(.*)  ([0-9-)]+)") %>%
+    extract(team1, c("team", "team_record", "team_place", "team_score"),
+            "(.*) ([0-9-)]+) ([0-9]+[a-z]{2}) (\\d+\\.\\d+)") %>%
+      extract(team2, c("opponent_score", "opponent", "opponent_record", "opponent_place"),
+              "(\\d+\\.\\d+) (.*) ([0-9-)]+) ([0-9]+[a-z]{2})") %>%
+    # extract(team2, c("opponent_projected", "opponent_score", "opponent", "opponent_record"),
+    #         "(\\d+\\.\\d+)  ([0-9.]+) +(.*)  ([0-9-)]+)") %>%
     bind_cols(teamIDs) %>%
-    select(week, teamID, team_score, opponentID, opponent_score)
+    select(week, gameID, teamID, team_score, opponentID, opponent_score)
 
   bind_rows(tmp,
-            rename(tmp, opponentID = 2, opponent_score = 3, teamID = 4, team_score = 5))
+            rename(tmp, opponentID = 3, opponent_score = 4, teamID = 5, team_score = 6))
 
 }
 
 get_yahoo_team <- function(week, teamID,
-                           leagueID = 56749,
+                           leagueID = 102347,
                            season = as.numeric(format(Sys.Date(),'%Y'))) {
 
   team_url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID,
@@ -397,7 +408,7 @@ get_yahoo_team <- function(week, teamID,
 }
 
 get_yahoo_winprob <- function(week, teamID,
-                              leagueID = 56749) {
+                              leagueID = 102347) {
 
   url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID,
                 "/matchup?week=", week, "&mid1=", teamID)
@@ -412,7 +423,7 @@ get_yahoo_winprob <- function(week, teamID,
 }
 
 get_yahoo_players <- function(week, position, page,
-                              leagueID = 56749) {
+                              leagueID = 102347) {
 
   url <- str_glue("https://football.fantasysports.yahoo.com/f1/{leagueID}/players?status=ALL&pos={position}&cut_type=9&stat1=S_PW_{week}&myteam=0&sort=AR&sdir=1&count={page}")
 
@@ -423,12 +434,12 @@ get_yahoo_players <- function(week, position, page,
     tibble(player = page %>%
              rvest::html_nodes("table") %>%
              .[[2]] %>%
-             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
+             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link playernote"]') %>%
              rvest::html_text(),
            playerID = page %>%
              rvest::html_nodes("table") %>%
              .[[2]] %>%
-             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
+             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link playernote"]') %>%
              rvest::html_attr("href") %>%
              str_extract("\\d*$"),
            teamID = page %>%
@@ -443,12 +454,12 @@ get_yahoo_players <- function(week, position, page,
     tibble(player = page %>%
              rvest::html_nodes("table") %>%
              .[[2]] %>%
-             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
+             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link playernote"]') %>%
              rvest::html_text(),
            playerID = page %>%
              rvest::html_nodes("table") %>%
              .[[2]] %>%
-             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
+             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link playernote"]') %>%
              rvest::html_attr("href") %>%
              str_extract("[a-z-]*/$") %>%
              str_remove("/"),
@@ -463,18 +474,18 @@ get_yahoo_players <- function(week, position, page,
 
     tibble(player = page %>%
              rvest::html_nodes("table") %>%
-             .[[2]] %>%
-             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
+             # .[[2]] %>%
+             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link playernote"]') %>%
              rvest::html_text(),
            playerID = page %>%
              rvest::html_nodes("table") %>%
-             .[[2]] %>%
-             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link"]') %>%
+             # .[[2]] %>%
+             rvest::html_nodes(xpath = '//*[@class="Nowrap name F-link playernote"]') %>%
              rvest::html_attr("href") %>%
              str_extract("\\d*$"),
            teamID = page %>%
              rvest::html_nodes("table") %>%
-             .[[2]] %>%
+             # .[[2]] %>%
              rvest::html_nodes(xpath = '//*[@class="Alt Ta-start Nowrap Bdrend"]') %>%
              map(get_yahoo_player_team) %>%
              unlist())

@@ -113,14 +113,14 @@ calculate_fvoa <- function(fit) {
 
   scores <- as_tibble(fit$data)
 
-  tidybayes::add_epred_draws(tibble(week = max(scores$week),
-                                    team = unique(scores$team)),
-                             fit,
-                             seed = 42) %>%
+  tidybayes::add_predicted_draws(tibble(week = max(scores$week),
+                                        team = unique(scores$team)),
+                                 fit,
+                                 seed = 42) %>%
     group_by(team) %>%
-    summarize(fvoa_wins = mean(.epred > 115),
-              fvoa_score = mean(.epred - 115),
-              fvoa_sd = sd(.epred - 115)) %>%
+    summarize(fvoa_wins = mean(.prediction > 110),
+              fvoa_score = mean(.prediction - 110),
+              fvoa_sd = sd(.prediction - 110)) %>%
     arrange(-fvoa_score) %>%
     select(team, fvoa = fvoa_score) %>%
     mutate(fvoa_rank = min_rank(-fvoa))

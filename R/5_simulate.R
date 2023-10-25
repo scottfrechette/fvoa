@@ -19,10 +19,11 @@ simulate_season_scores <- function(schedule,
     bind_rows(next_week_sim) %>%
     nest(.by = c(team, sim)) %>%
     mutate(pred = map2(data, sim,
-                       ~sim_season(.x$score, .y,
-                                   last_n = .last_n,
-                                   change_prob = .change_prob,
-                                   score_adj = .score_adj))) %>%
+                       ~sim_team_season(scores = .x$score,
+                                        seed = .y,
+                                        last_n = .last_n,
+                                        change_prob = .change_prob,
+                                        score_adj = .score_adj))) %>%
     select(-data) %>%
     unnest(pred)
 
@@ -130,7 +131,7 @@ sim_team_season <- function(scores,
   set.seed(seed)
 
   score_tmp <- rep(NA, 15)
-  score_tmp[1:length(score)] <- score
+  score_tmp[1:length(scores)] <- scores
 
   for (i in (length(scores) + 1):15) {
 
@@ -153,6 +154,24 @@ sim_team_season <- function(scores,
   }
 
   tibble(week = 1:15, score = score_tmp)
+
+}
+
+estimate_normal <- function(prior_mean,
+                            prior_sd,
+                            data_mean,
+                            data_sd,
+                            data_n) {
+
+  prior_precision <- 1 / prior_sd ^ 2
+  data_se <- data_sd / sqrt(data_n)
+  data_precision <- 1 / data_se ^ 2
+  post_precision <- prior_precision + data_precision
+  post_sd <- sqrt(1 / post_precision)
+  post_mean <- weighted.mean(c(prior_mean, data_mean),
+                             c(prior_precision, data_precision))
+
+  list(mean = post_mean, sd = post_sd)
 
 }
 

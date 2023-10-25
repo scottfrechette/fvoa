@@ -4,16 +4,25 @@
 #' @export
 fit_team <- function(scores) {
 
+  scores <- left_join(scores,
+                      weight_games(1:max(scores$week)),
+                      by = 'week')
+
   rstanarm::stan_glmer(data = scores,
                        score ~ week + (week | team),
-                       prior = normal(0, 25),
-                       prior_intercept = student_t(10, 110, 35),
-                       prior_aux = exponential(rate = 1, autoscale = T),
-                       prior_covariance = decov(1, 1, 1, 1),
+                       # score ~ 1 + (1 | team),
+                       # score ~ 0 +  team,
+                       # score ~ 0 + week + (week | team),
+                       # weights = weight,
+                       # prior = rstanarm::student_t(nrow(scores) - 1, 110, 10),
+                       prior = rstanarm::normal(0, 2),
+                       prior_intercept = rstanarm::student_t(nrow(scores) - 1, 110, 10),
+                       prior_aux = rstanarm::exponential(rate = 1 / 23),
+                       prior_covariance = rstanarm::decov(1, 1, 1, 1),
                        seed = 42,
                        iter = 3750,
                        warmup = 1250,
-                       cores = 4,
+                       cores = 1,
                        chains = 4,
                        refresh = 0)
 
@@ -71,7 +80,7 @@ weight_games <- function(x, alpha = 0.15) {
          weight = weekly_weights)
 }
 
-extract_team_draws <- function(team_data, fit, ndraws = NULL) {
+extract_team_draws <- function(fit, ndraws = NULL) {
 
   tibble(week = max(fit$data$week),
          team = unique(fit$data$team)) %>%
