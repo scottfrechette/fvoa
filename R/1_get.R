@@ -361,7 +361,8 @@ get_yahoo_team <- function(week, teamID,
                            leagueID = 102347,
                            season = as.numeric(format(Sys.Date(),'%Y'))) {
 
-  team_url <- paste0("https://football.fantasysports.yahoo.com/f1/", leagueID,
+  team_url <- paste0("https://football.fantasysports.yahoo.com/", season,
+                     "/f1/", leagueID,
                      "/matchup?week=", week, "&mid1=", teamID)
 
   page <- xml2::read_html(team_url)
